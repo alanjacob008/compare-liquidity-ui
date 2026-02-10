@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EXCHANGES, POLL_INTERVAL_MS } from "@/lib/constants";
 import { EXCHANGE_REGISTRY } from "@/lib/exchanges";
+import { fetchOrderbookRaw } from "@/lib/orderbook-client";
 import { analyzeBook } from "@/lib/slippage";
 import type { ExchangeKey, ExchangeRecord, ExchangeStatus, LiquidityAnalysis, TickerKey } from "@/lib/types";
 
@@ -67,23 +68,7 @@ export function useLiquidityPoll(ticker: TickerKey): {
 
       const settled = await Promise.allSettled(
         EXCHANGES.map(async (exchange): Promise<PollOutcome> => {
-          const response = await fetch(`/api/orderbook?exchange=${exchange}&ticker=${ticker}`, {
-            cache: "no-store",
-          });
-
-          if (!response.ok) {
-            let details = "";
-            try {
-              const payload = (await response.json()) as { error?: string };
-              details = payload.error ?? "";
-            } catch {
-              details = "";
-            }
-
-            throw new Error(`HTTP ${response.status}${details ? `: ${details}` : ""}`);
-          }
-
-          const raw = (await response.json()) as unknown;
+          const raw = await fetchOrderbookRaw(exchange, ticker);
           const book = EXCHANGE_REGISTRY[exchange].parse(raw);
           const analysis = analyzeBook({ ticker, exchange, book });
           return { exchange, analysis };

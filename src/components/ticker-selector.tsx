@@ -46,7 +46,7 @@ export function TickerSelector({ value, onChange }: TickerSelectorProps) {
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="card-surface flex w-full items-center justify-between px-4 py-3 text-left transition hover:border-[color:var(--accent)]"
+        className="card-surface flex w-full items-center justify-between px-4 py-3 text-left transition hover:border-[color:var(--border-strong)]"
       >
         <span className="data-mono text-lg font-medium text-[var(--text-primary)]">{value}</span>
         <span className="text-xs text-[var(--text-secondary)]">{isOpen ? "Close" : "Select"}</span>
@@ -77,8 +77,8 @@ export function TickerSelector({ value, onChange }: TickerSelectorProps) {
                     <button
                       type="button"
                       onClick={() => onSelect(ticker)}
-                      className={`w-full rounded-md px-3 py-2 text-left transition hover:bg-[color:var(--bg-secondary)] ${
-                        ticker === value ? "bg-[color:var(--bg-secondary)]" : ""
+                      className={`w-full rounded-md px-3 py-2 text-left transition hover:bg-[color:rgba(79,140,255,0.11)] ${
+                        ticker === value ? "bg-[color:rgba(79,140,255,0.11)]" : ""
                       }`}
                     >
                       <p className="data-mono text-sm font-medium text-[var(--text-primary)]">{ticker}</p>

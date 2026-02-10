@@ -17,19 +17,12 @@ export function SpreadCards({ statuses }: SpreadCardsProps) {
         const analysis = status.analysis;
 
         return (
-          <article
-            key={exchange}
-            className="card-surface overflow-hidden"
-            style={{ borderColor: `${EXCHANGE_COLORS[exchange]}66` }}
-          >
-            <div
-              className="h-1 w-full"
-              style={{ background: `linear-gradient(90deg, ${EXCHANGE_COLORS[exchange]} 0%, transparent 100%)` }}
-            />
+          <article key={exchange} className="card-surface overflow-hidden" style={{ borderColor: `${EXCHANGE_COLORS[exchange]}66` }}>
+            <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, ${EXCHANGE_COLORS[exchange]} 0%, transparent 100%)` }} />
 
             <div className="space-y-3 p-4">
               <div className="flex items-start justify-between gap-2">
-                <h3 className="font-display text-2xl italic text-[var(--text-primary)]">{EXCHANGE_LABELS[exchange]}</h3>
+                <h3 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">{EXCHANGE_LABELS[exchange]}</h3>
                 <PulseDot timestamp={status.lastUpdated} />
               </div>
 
