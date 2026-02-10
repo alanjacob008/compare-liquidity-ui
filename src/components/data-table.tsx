@@ -21,23 +21,17 @@ export function DataTable({ statuses }: DataTableProps) {
   return (
     <section className="panel">
       <div className="mb-4 space-y-1">
-        <p className="label">Detailed View</p>
-        <h3 className="font-display text-2xl italic text-[var(--text-primary)]">Slippage Breakdown Table</h3>
+        <p className="label">Detailed analytics</p>
+        <h3 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Slippage Breakdown</h3>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-xl border border-[color:var(--border)]">
         <table className="w-full min-w-[980px] border-collapse text-left text-sm">
-          <thead>
+          <thead className="bg-[color:rgba(79,140,255,0.08)]">
             <tr className="border-b border-[color:var(--border)]">
-              <th rowSpan={2} className="px-3 py-3 font-medium text-[var(--text-secondary)]">
-                Exchange
-              </th>
+              <th rowSpan={2} className="px-3 py-3 font-medium text-[var(--text-secondary)]">Exchange</th>
               {NOTIONAL_TIERS.map((tier) => (
-                <th
-                  key={`group-${tier}`}
-                  colSpan={2}
-                  className="px-3 py-3 text-center font-medium text-[var(--text-secondary)]"
-                >
+                <th key={`group-${tier}`} colSpan={2} className="px-3 py-3 text-center font-medium text-[var(--text-secondary)]">
                   {formatTier(tier)}
                 </th>
               ))}
@@ -61,9 +55,7 @@ export function DataTable({ statuses }: DataTableProps) {
                   <td className="px-3 py-3">
                     <div className="space-y-1">
                       <p className="font-medium text-[var(--text-primary)]">{EXCHANGE_LABELS[exchange]}</p>
-                      {statuses[exchange].error ? (
-                        <p className="text-xs text-[var(--danger)]">{statuses[exchange].error}</p>
-                      ) : null}
+                      {statuses[exchange].error ? <p className="text-xs text-[var(--danger)]">{statuses[exchange].error}</p> : null}
                     </div>
                   </td>
 
@@ -73,18 +65,10 @@ export function DataTable({ statuses }: DataTableProps) {
 
                     return (
                       <Fragment key={`${exchange}-${tier}`}>
-                        <td
-                          className={`data-mono px-3 py-3 text-center ${
-                            bidPoint && !bidPoint.filled ? "text-[var(--warning)]" : "text-[var(--text-secondary)]"
-                          }`}
-                        >
+                        <td className={`data-mono px-3 py-3 text-center ${bidPoint && !bidPoint.filled ? "text-[var(--warning)]" : "text-[var(--text-secondary)]"}`}>
                           {renderCell(bidPoint)}
                         </td>
-                        <td
-                          className={`data-mono px-3 py-3 text-center ${
-                            askPoint && !askPoint.filled ? "text-[var(--warning)]" : "text-[var(--text-secondary)]"
-                          }`}
-                        >
+                        <td className={`data-mono px-3 py-3 text-center ${askPoint && !askPoint.filled ? "text-[var(--warning)]" : "text-[var(--text-secondary)]"}`}>
                           {renderCell(askPoint)}
                         </td>
                       </Fragment>
@@ -98,7 +82,7 @@ export function DataTable({ statuses }: DataTableProps) {
       </div>
 
       <p className="mt-3 text-xs text-[var(--text-muted)]">
-        Cells highlighted in amber indicate the target notional was only partially filled by available book depth.
+        Amber cells indicate partial fills where available depth could not satisfy the full target notional.
       </p>
     </section>
   );

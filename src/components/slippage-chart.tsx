@@ -1,15 +1,6 @@
 "use client";
 
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { EXCHANGES, EXCHANGE_COLORS, EXCHANGE_LABELS, NOTIONAL_TIERS } from "@/lib/constants";
 import { formatTier } from "@/lib/format";
 import type { ExchangeKey, ExchangeRecord, ExchangeStatus } from "@/lib/types";
@@ -42,42 +33,43 @@ export function SlippageChart({ side, statuses }: SlippageChartProps) {
 
   if (!hasData) {
     return (
-      <div className="flex h-[280px] items-center justify-center rounded-xl border border-dashed border-[color:var(--border)] text-sm text-[var(--text-muted)]">
+      <div className="flex h-[300px] items-center justify-center rounded-xl border border-dashed border-[color:var(--border)] text-sm text-[var(--text-muted)]">
         Waiting for enough order book data to render chart.
       </div>
     );
   }
 
   return (
-    <div className="h-[280px] w-full">
+    <div className="h-[300px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ left: 4, right: 12, top: 8, bottom: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(232, 224, 212, 0.08)" />
+        <BarChart data={data} margin={{ left: 4, right: 12, top: 6, bottom: 6 }} barGap={2}>
+          <CartesianGrid strokeDasharray="4 4" stroke="rgba(186, 213, 255, 0.12)" />
           <XAxis
             dataKey="tier"
-            tick={{ fill: "#a39685", fontSize: 12 }}
-            axisLine={{ stroke: "rgba(232, 224, 212, 0.15)" }}
-            tickLine={{ stroke: "rgba(232, 224, 212, 0.15)" }}
+            tick={{ fill: "#9fb0d1", fontSize: 12 }}
+            axisLine={{ stroke: "rgba(186, 213, 255, 0.22)" }}
+            tickLine={{ stroke: "rgba(186, 213, 255, 0.22)" }}
           />
           <YAxis
-            tick={{ fill: "#a39685", fontSize: 12 }}
-            axisLine={{ stroke: "rgba(232, 224, 212, 0.15)" }}
-            tickLine={{ stroke: "rgba(232, 224, 212, 0.15)" }}
+            tick={{ fill: "#9fb0d1", fontSize: 12 }}
+            axisLine={{ stroke: "rgba(186, 213, 255, 0.22)" }}
+            tickLine={{ stroke: "rgba(186, 213, 255, 0.22)" }}
             width={56}
           />
           <Tooltip
-            cursor={{ fill: "rgba(255, 255, 255, 0.03)" }}
+            cursor={{ fill: "rgba(79, 140, 255, 0.12)" }}
             contentStyle={{
-              background: "#2d251d",
-              border: "1px solid #3d3329",
-              borderRadius: "0.5rem",
+              background: "#101c32",
+              border: "1px solid rgba(141, 168, 213, 0.35)",
+              borderRadius: "0.6rem",
+              boxShadow: "0 12px 28px rgba(2, 8, 20, 0.6)",
             }}
             formatter={(value: number | string, name: string) => {
               const numeric = typeof value === "number" ? value : Number(value);
               return [`${numeric.toFixed(2)} bps`, EXCHANGE_LABELS[name as ExchangeKey]];
             }}
           />
-          <Legend wrapperStyle={{ color: "#a39685", fontSize: "12px" }} />
+          <Legend wrapperStyle={{ color: "#9fb0d1", fontSize: "12px" }} />
 
           {EXCHANGES.map((exchange) => (
             <Bar
