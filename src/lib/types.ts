@@ -1,0 +1,46 @@
+export type ExchangeKey = "hyperliquid" | "dydx" | "lighter" | "asterdex" | "binance" | "bybit";
+export type TickerKey = "BTC" | "ETH" | "SOL";
+export type BookSide = "bid" | "ask";
+
+export interface BookLevel {
+  px: number;
+  sz: number;
+}
+
+export interface NormalizedBook {
+  bids: BookLevel[];
+  asks: BookLevel[];
+  timestamp: number;
+}
+
+export interface SlippageResult {
+  notional: number;
+  vwap: number;
+  slippageBps: number;
+  filled: boolean;
+  filledNotional: number;
+}
+
+export interface LiquidityAnalysis {
+  ticker: TickerKey;
+  exchange: ExchangeKey;
+  timestamp: number;
+  collectedAt: string;
+  bestBid: number;
+  bestAsk: number;
+  midPrice: number;
+  spread: number;
+  spreadBps: number;
+  bids: SlippageResult[];
+  asks: SlippageResult[];
+}
+
+export interface ExchangeStatus {
+  exchange: ExchangeKey;
+  loading: boolean;
+  error: string | null;
+  lastUpdated: number | null;
+  analysis: LiquidityAnalysis | null;
+}
+
+export type ExchangeRecord<T> = Record<ExchangeKey, T>;
