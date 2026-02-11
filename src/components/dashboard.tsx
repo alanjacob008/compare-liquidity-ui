@@ -20,15 +20,15 @@ export function Dashboard({ ticker, statuses, lastRefreshAt }: DashboardProps) {
     <section className="space-y-5">
       <div className="panel flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
-          <p className="label">Overview</p>
-          <h3 className="font-display text-2xl italic text-[var(--text-primary)]">{ticker} Perpetual Liquidity</h3>
-          <p className="text-sm text-[var(--text-secondary)]">Comparing spread and execution slippage across six venues.</p>
+          <p className="label">Market Overview</p>
+          <h3 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">{ticker} Perpetual Liquidity</h3>
+          <p className="text-sm text-[var(--text-secondary)]">Spread and execution depth for six venues, refreshed every 1.5s.</p>
         </div>
         <PulseDot timestamp={lastRefreshAt} />
       </div>
 
       {failedExchanges.length > 0 ? (
-        <div className="panel border-[color:rgba(201,106,84,0.5)] text-sm text-[var(--text-secondary)]">
+        <div className="panel border-[color:rgba(255,111,124,0.5)] text-sm text-[var(--text-secondary)]">
           Some venues are currently unavailable: {failedExchanges.map((exchange) => EXCHANGE_LABELS[exchange]).join(", ")}.
         </div>
       ) : null}

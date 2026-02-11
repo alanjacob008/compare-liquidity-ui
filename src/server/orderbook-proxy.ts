@@ -78,6 +78,8 @@ async function buildUpstreamRequest(exchange: ExchangeKey, symbol: string): Prom
           body: JSON.stringify({
             type: "l2Book",
             coin: symbol,
+          nSigFigs: 5,
+          mantissa: 1,
           }),
         },
       };

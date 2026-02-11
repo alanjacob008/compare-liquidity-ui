@@ -41,19 +41,19 @@ export function TickerSelector({ value, onChange }: TickerSelectorProps) {
   };
 
   return (
-    <div ref={wrapperRef} className="relative w-full max-w-sm">
+    <div ref={wrapperRef} className="relative z-[70] w-full max-w-sm">
       <p className="label mb-2">Ticker</p>
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="card-surface flex w-full items-center justify-between px-4 py-3 text-left transition hover:border-[color:var(--accent)]"
+        className="flex w-full items-center justify-between rounded-xl border border-[color:var(--border)] bg-[color:rgba(16,26,47,0.9)] px-4 py-3 text-left transition hover:border-[color:var(--border-strong)]"
       >
         <span className="data-mono text-lg font-medium text-[var(--text-primary)]">{value}</span>
         <span className="text-xs text-[var(--text-secondary)]">{isOpen ? "Close" : "Select"}</span>
       </button>
 
       {isOpen ? (
-        <div className="card-surface absolute z-20 mt-2 w-full overflow-hidden">
+        <div className="absolute z-[90] mt-2 w-full overflow-hidden rounded-xl border border-[color:var(--border)] bg-[color:rgba(16,26,47,0.97)]">
           <div className="border-b border-[color:var(--border)] p-2">
             <input
               value={query}
@@ -77,8 +77,8 @@ export function TickerSelector({ value, onChange }: TickerSelectorProps) {
                     <button
                       type="button"
                       onClick={() => onSelect(ticker)}
-                      className={`w-full rounded-md px-3 py-2 text-left transition hover:bg-[color:var(--bg-secondary)] ${
-                        ticker === value ? "bg-[color:var(--bg-secondary)]" : ""
+                      className={`w-full rounded-md px-3 py-2 text-left transition hover:bg-[color:rgba(79,140,255,0.11)] ${
+                        ticker === value ? "bg-[color:rgba(79,140,255,0.11)]" : ""
                       }`}
                     >
                       <p className="data-mono text-sm font-medium text-[var(--text-primary)]">{ticker}</p>

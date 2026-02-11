@@ -1,15 +1,7 @@
 "use client";
 
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import type { TooltipProps } from "recharts";
 import { EXCHANGES, EXCHANGE_COLORS, EXCHANGE_LABELS, NOTIONAL_TIERS } from "@/lib/constants";
 import { formatTier } from "@/lib/format";
 import type { ExchangeKey, ExchangeRecord, ExchangeStatus } from "@/lib/types";
@@ -22,6 +14,34 @@ interface SlippageChartProps {
 type ChartDatum = {
   tier: string;
 } & Partial<Record<ExchangeKey, number | null>>;
+
+function CustomTooltip({ active, label, payload }: TooltipProps<number, string>) {
+  if (!active || !payload || payload.length === 0) return null;
+
+  const validItems = payload.filter((entry) => typeof entry.value === "number");
+  if (validItems.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-[color:rgba(141,168,213,0.35)] bg-[color:#101c32] p-3 shadow-[0_12px_28px_rgba(2,8,20,0.6)]">
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--text-secondary)]">Tier: {label}</p>
+      <div className="space-y-1">
+        {validItems.map((entry) => {
+          const exchangeKey = entry.dataKey as ExchangeKey;
+          const exchangeLabel = EXCHANGE_LABELS[exchangeKey] ?? exchangeKey;
+          const value = Number(entry.value);
+
+          return (
+            <p key={String(entry.dataKey)} className="text-xs text-[var(--text-primary)]">
+              <span className="mr-2 inline-block h-2 w-2 rounded-full align-middle" style={{ backgroundColor: String(entry.color ?? "#9fb0d1") }} />
+              <span className="align-middle">{exchangeLabel}: </span>
+              <span className="data-mono align-middle text-[var(--text-secondary)]">{value.toFixed(2)} bps</span>
+            </p>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function SlippageChart({ side, statuses }: SlippageChartProps) {
   const data: ChartDatum[] = NOTIONAL_TIERS.map((tier, idx) => {
@@ -42,42 +62,31 @@ export function SlippageChart({ side, statuses }: SlippageChartProps) {
 
   if (!hasData) {
     return (
-      <div className="flex h-[280px] items-center justify-center rounded-xl border border-dashed border-[color:var(--border)] text-sm text-[var(--text-muted)]">
+      <div className="flex h-[300px] items-center justify-center rounded-xl border border-dashed border-[color:var(--border)] text-sm text-[var(--text-muted)]">
         Waiting for enough order book data to render chart.
       </div>
     );
   }
 
   return (
-    <div className="h-[280px] w-full">
+    <div className="h-[300px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ left: 4, right: 12, top: 8, bottom: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(232, 224, 212, 0.08)" />
+        <BarChart data={data} margin={{ left: 4, right: 12, top: 6, bottom: 6 }} barGap={2}>
+          <CartesianGrid strokeDasharray="4 4" stroke="rgba(186, 213, 255, 0.12)" />
           <XAxis
             dataKey="tier"
-            tick={{ fill: "#a39685", fontSize: 12 }}
-            axisLine={{ stroke: "rgba(232, 224, 212, 0.15)" }}
-            tickLine={{ stroke: "rgba(232, 224, 212, 0.15)" }}
+            tick={{ fill: "#9fb0d1", fontSize: 12 }}
+            axisLine={{ stroke: "rgba(186, 213, 255, 0.22)" }}
+            tickLine={{ stroke: "rgba(186, 213, 255, 0.22)" }}
           />
           <YAxis
-            tick={{ fill: "#a39685", fontSize: 12 }}
-            axisLine={{ stroke: "rgba(232, 224, 212, 0.15)" }}
-            tickLine={{ stroke: "rgba(232, 224, 212, 0.15)" }}
+            tick={{ fill: "#9fb0d1", fontSize: 12 }}
+            axisLine={{ stroke: "rgba(186, 213, 255, 0.22)" }}
+            tickLine={{ stroke: "rgba(186, 213, 255, 0.22)" }}
             width={56}
           />
-          <Tooltip
-            cursor={{ fill: "rgba(255, 255, 255, 0.03)" }}
-            contentStyle={{
-              background: "#2d251d",
-              border: "1px solid #3d3329",
-              borderRadius: "0.5rem",
-            }}
-            formatter={(value: number | string, name: string) => {
-              const numeric = typeof value === "number" ? value : Number(value);
-              return [`${numeric.toFixed(2)} bps`, EXCHANGE_LABELS[name as ExchangeKey]];
-            }}
-          />
-          <Legend wrapperStyle={{ color: "#a39685", fontSize: "12px" }} />
+          <Tooltip cursor={{ fill: "rgba(79, 140, 255, 0.12)" }} content={<CustomTooltip />} />
+          <Legend wrapperStyle={{ color: "#9fb0d1", fontSize: "12px" }} />
 
           {EXCHANGES.map((exchange) => (
             <Bar
