@@ -28,6 +28,10 @@ type PollOutcome = {
   analysis: LiquidityAnalysis;
 };
 
+function hasPartialFill(analysis: LiquidityAnalysis): boolean {
+  return [...analysis.bids, ...analysis.asks].some((point) => !point.filled);
+}
+
 function formatError(error: unknown): string {
   if (error instanceof Error) return error.message;
   return "Unknown polling error";
@@ -68,10 +72,51 @@ export function useLiquidityPoll(ticker: TickerKey): {
 
       const settled = await Promise.allSettled(
         EXCHANGES.map(async (exchange): Promise<PollOutcome> => {
-          const raw = await fetchOrderbookRaw(exchange, ticker);
-          const book = EXCHANGE_REGISTRY[exchange].parse(raw);
-          const analysis = analyzeBook({ ticker, exchange, book });
-          return { exchange, analysis };
+          if (exchange !== "hyperliquid") {
+            const raw = await fetchOrderbookRaw(exchange, ticker);
+            const book = EXCHANGE_REGISTRY[exchange].parse(raw);
+            const analysis = analyzeBook({ ticker, exchange, book });
+            return { exchange, analysis };
+          }
+
+          const rawFine = await fetchOrderbookRaw(exchange, ticker, {
+            hyperliquid: { nSigFigs: 5 },
+          });
+          const fineBook = EXCHANGE_REGISTRY[exchange].parse(rawFine);
+          const fineAnalysis = analyzeBook({
+            ticker,
+            exchange,
+            book: fineBook,
+            meta: {
+              isAggregatedEstimate: false,
+              hyperliquidNSigFigs: 5,
+            },
+          });
+
+          if (!hasPartialFill(fineAnalysis)) {
+            return { exchange, analysis: fineAnalysis };
+          }
+
+          try {
+            const rawCoarse = await fetchOrderbookRaw(exchange, ticker, {
+              hyperliquid: { nSigFigs: 4 },
+            });
+            const coarseBook = EXCHANGE_REGISTRY[exchange].parse(rawCoarse);
+            const coarseAnalysis = analyzeBook({
+              ticker,
+              exchange,
+              book: coarseBook,
+              meta: {
+                isAggregatedEstimate: true,
+                hyperliquidNSigFigs: 4,
+              },
+            });
+
+            return { exchange, analysis: coarseAnalysis };
+          } catch {
+            // Graceful fallback: keep fine-grained snapshot if coarser request fails.
+            return { exchange, analysis: fineAnalysis };
+          }
         })
       );
 

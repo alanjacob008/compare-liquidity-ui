@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { EXCHANGES, EXCHANGE_LABELS, TICKERS, TICKER_MAP } from "@/lib/constants";
+import { EXCHANGES, EXCHANGE_LABELS, TRACKED_TICKERS } from "@/lib/constants";
 import type { TickerKey } from "@/lib/types";
 
 interface TickerSelectorProps {
@@ -30,8 +30,8 @@ export function TickerSelector({ value, onChange }: TickerSelectorProps) {
 
   const filteredTickers = useMemo(() => {
     const trimmed = query.trim().toLowerCase();
-    if (!trimmed) return TICKERS;
-    return TICKERS.filter((ticker) => ticker.toLowerCase().includes(trimmed));
+    if (!trimmed) return TRACKED_TICKERS;
+    return TRACKED_TICKERS.filter((row) => row.ticker.toLowerCase().includes(trimmed));
   }, [query]);
 
   const onSelect = (ticker: TickerKey) => {
@@ -53,7 +53,7 @@ export function TickerSelector({ value, onChange }: TickerSelectorProps) {
       </button>
 
       {isOpen ? (
-        <div className="card-surface absolute z-20 mt-2 w-full overflow-hidden">
+        <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-[color:var(--border)] bg-[color:var(--bg-secondary)] shadow-[0_18px_35px_rgba(2,8,20,0.66)]">
           <div className="border-b border-[color:var(--border)] p-2">
             <input
               value={query}
@@ -67,22 +67,21 @@ export function TickerSelector({ value, onChange }: TickerSelectorProps) {
             {filteredTickers.length === 0 ? (
               <li className="rounded-md px-3 py-2 text-sm text-[var(--text-muted)]">No tickers found.</li>
             ) : (
-              filteredTickers.map((ticker) => {
-                const support = EXCHANGES.filter((exchange) => Boolean(TICKER_MAP[ticker][exchange]))
-                  .map((exchange) => EXCHANGE_LABELS[exchange])
-                  .join(", ");
+              filteredTickers.map((row) => {
+                const ticker = row.ticker;
+                const mappedSymbols = EXCHANGES.map((exchange) => `${EXCHANGE_LABELS[exchange]}: ${row.symbols[exchange]}`).join(" | ");
 
                 return (
                   <li key={ticker}>
                     <button
                       type="button"
                       onClick={() => onSelect(ticker)}
-                      className={`w-full rounded-md px-3 py-2 text-left transition hover:bg-[color:rgba(79,140,255,0.11)] ${
-                        ticker === value ? "bg-[color:rgba(79,140,255,0.11)]" : ""
+                      className={`w-full rounded-md px-3 py-2 text-left transition hover:bg-[color:rgba(79,140,255,0.18)] ${
+                        ticker === value ? "bg-[color:rgba(79,140,255,0.2)]" : ""
                       }`}
                     >
                       <p className="data-mono text-sm font-medium text-[var(--text-primary)]">{ticker}</p>
-                      <p className="text-xs text-[var(--text-secondary)]">{support}</p>
+                      <p className="text-xs text-[var(--text-secondary)]">{mappedSymbols}</p>
                     </button>
                   </li>
                 );

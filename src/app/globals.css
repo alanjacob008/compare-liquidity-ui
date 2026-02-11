@@ -47,9 +47,6 @@ a {
   border: 1px solid var(--border);
   border-radius: 18px;
   background: linear-gradient(170deg, rgba(20, 32, 57, 0.82), rgba(10, 19, 36, 0.85));
-  box-shadow:
-    0 24px 50px rgba(3, 8, 19, 0.52),
-    inset 0 1px 0 rgba(185, 209, 255, 0.12);
   backdrop-filter: blur(8px);
   padding: 1rem;
 }
@@ -64,7 +61,6 @@ a {
   border: 1px solid var(--border);
   border-radius: 14px;
   background: linear-gradient(160deg, rgba(20, 32, 57, 0.92), rgba(12, 21, 38, 0.92));
-  box-shadow: 0 10px 30px rgba(4, 9, 22, 0.5);
 }
 
 .label {

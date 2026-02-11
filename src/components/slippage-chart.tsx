@@ -3,18 +3,87 @@
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { EXCHANGES, EXCHANGE_COLORS, EXCHANGE_LABELS, NOTIONAL_TIERS } from "@/lib/constants";
 import { formatTier } from "@/lib/format";
-import type { ExchangeKey, ExchangeRecord, ExchangeStatus } from "@/lib/types";
+import type { ExchangeKey, ExchangeRecord, ExchangeStatus, SpreadUnit } from "@/lib/types";
 
 interface SlippageChartProps {
   side: "ask" | "bid";
   statuses: ExchangeRecord<ExchangeStatus>;
+  spreadUnit: SpreadUnit;
 }
 
 type ChartDatum = {
   tier: string;
 } & Partial<Record<ExchangeKey, number | null>>;
 
-export function SlippageChart({ side, statuses }: SlippageChartProps) {
+function CustomTooltip({ active, payload, label, spreadUnit }: any) {
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div
+      style={{
+        background: "#101c32",
+        border: "1px solid rgba(141, 168, 213, 0.35)",
+        borderRadius: "0.6rem",
+        padding: "0.75rem 1rem",
+      }}
+    >
+      <p
+        style={{
+          color: "#9fb0d1",
+          fontSize: "11px",
+          marginBottom: "8px",
+          fontWeight: 600,
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+        }}
+      >
+        {label}
+      </p>
+      {payload
+        .filter((entry: any) => entry.value != null)
+        .map((entry: any) => {
+          const val = typeof entry.value === "number" ? entry.value : Number(entry.value);
+          const display =
+            spreadUnit === "pct" ? `${(val / 100).toFixed(4)}%` : `${val.toFixed(2)} bps`;
+
+          return (
+            <div
+              key={entry.dataKey}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "3px 0",
+              }}
+            >
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: entry.color,
+                  flexShrink: 0,
+                }}
+              />
+              <span style={{ color: "#e8eefb", fontSize: "12px", flex: 1 }}>{entry.name}</span>
+              <span
+                style={{
+                  color: "#e8eefb",
+                  fontSize: "12px",
+                  fontFamily: "var(--font-mono), monospace",
+                  fontWeight: 500,
+                }}
+              >
+                {display}
+              </span>
+            </div>
+          );
+        })}
+    </div>
+  );
+}
+
+export function SlippageChart({ side, statuses, spreadUnit }: SlippageChartProps) {
   const data: ChartDatum[] = NOTIONAL_TIERS.map((tier, idx) => {
     const row: ChartDatum = {
       tier: formatTier(tier),
@@ -55,19 +124,13 @@ export function SlippageChart({ side, statuses }: SlippageChartProps) {
             axisLine={{ stroke: "rgba(186, 213, 255, 0.22)" }}
             tickLine={{ stroke: "rgba(186, 213, 255, 0.22)" }}
             width={56}
+            tickFormatter={(v: number) =>
+              spreadUnit === "pct" ? `${(v / 100).toFixed(2)}%` : `${v}`
+            }
           />
           <Tooltip
             cursor={{ fill: "rgba(79, 140, 255, 0.12)" }}
-            contentStyle={{
-              background: "#101c32",
-              border: "1px solid rgba(141, 168, 213, 0.35)",
-              borderRadius: "0.6rem",
-              boxShadow: "0 12px 28px rgba(2, 8, 20, 0.6)",
-            }}
-            formatter={(value: number | string, name: string) => {
-              const numeric = typeof value === "number" ? value : Number(value);
-              return [`${numeric.toFixed(2)} bps`, EXCHANGE_LABELS[name as ExchangeKey]];
-            }}
+            content={<CustomTooltip spreadUnit={spreadUnit} />}
           />
           <Legend wrapperStyle={{ color: "#9fb0d1", fontSize: "12px" }} />
 

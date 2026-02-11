@@ -1,10 +1,11 @@
 import type { ExchangeKey, ExchangeRecord, TickerKey } from "./types";
+import { buildTickerMap, listPairMappings, listTrackedTickers } from "./pair-mapping";
 
 export const NOTIONAL_TIERS = [1_000, 10_000, 100_000, 1_000_000] as const;
 export const POLL_INTERVAL_MS = 1_500;
 
 export const EXCHANGES: ExchangeKey[] = ["hyperliquid", "dydx", "lighter", "asterdex", "binance", "bybit"];
-export const TICKERS: TickerKey[] = ["BTC", "ETH", "SOL"];
+export const TICKERS: TickerKey[] = listTrackedTickers();
 
 export const EXCHANGE_LABELS: ExchangeRecord<string> = {
   hyperliquid: "Hyperliquid",
@@ -16,40 +17,17 @@ export const EXCHANGE_LABELS: ExchangeRecord<string> = {
 };
 
 export const EXCHANGE_COLORS: ExchangeRecord<string> = {
-  hyperliquid: "#a0522d",
-  dydx: "#7c6fdb",
-  lighter: "#4a9e7a",
-  asterdex: "#c88832",
-  binance: "#f0b90b",
-  bybit: "#f7a600",
+  hyperliquid: "#96FCE4",
+  dydx: "#7774FF",
+  lighter: "#F3F3F3",
+  asterdex: "#C99F6F",
+  binance: "#FCD535",
+  bybit: "#FF9C2E",
 };
 
-export const TICKER_MAP: Record<TickerKey, ExchangeRecord<string>> = {
-  BTC: {
-    hyperliquid: "BTC",
-    dydx: "BTC-USD",
-    lighter: "BTC",
-    asterdex: "BTCUSDT",
-    binance: "BTCUSDT",
-    bybit: "BTCUSDT",
-  },
-  ETH: {
-    hyperliquid: "ETH",
-    dydx: "ETH-USD",
-    lighter: "ETH",
-    asterdex: "ETHUSDT",
-    binance: "ETHUSDT",
-    bybit: "ETHUSDT",
-  },
-  SOL: {
-    hyperliquid: "SOL",
-    dydx: "SOL-USD",
-    lighter: "SOL",
-    asterdex: "SOLUSDT",
-    binance: "SOLUSDT",
-    bybit: "SOLUSDT",
-  },
-};
+export const TICKER_MAP: Record<TickerKey, ExchangeRecord<string>> = buildTickerMap(TICKERS);
+export const TRACKED_TICKERS = listPairMappings(TICKERS);
+export const TICKER_PAIR_ROWS = TRACKED_TICKERS;
 
 export function isExchangeKey(value: string): value is ExchangeKey {
   return EXCHANGES.includes(value as ExchangeKey);

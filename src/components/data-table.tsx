@@ -1,28 +1,50 @@
 "use client";
 
-import { Fragment } from "react";
-import { EXCHANGES, EXCHANGE_LABELS, NOTIONAL_TIERS } from "@/lib/constants";
+import { Fragment, type CSSProperties } from "react";
+import { EXCHANGES, EXCHANGE_COLORS, EXCHANGE_LABELS, NOTIONAL_TIERS } from "@/lib/constants";
 import { formatTier, formatUsd } from "@/lib/format";
-import type { ExchangeRecord, ExchangeStatus, SlippageResult } from "@/lib/types";
+import type { ExchangeRecord, ExchangeStatus, SlippageResult, SpreadUnit, TickerKey } from "@/lib/types";
+import { PulseDot } from "./pulse-dot";
 
 interface DataTableProps {
   statuses: ExchangeRecord<ExchangeStatus>;
+  ticker: TickerKey;
+  lastRefreshAt: number | null;
+  spreadUnit: SpreadUnit;
+  onToggleUnit: () => void;
 }
 
-function renderCell(point: SlippageResult | undefined): string {
+function renderCell(point: SlippageResult | undefined, unit: SpreadUnit): string {
   if (!point) return "--";
 
-  const base = `${point.slippageBps.toFixed(2)} bps`;
-  if (point.filled) return base;
-  return `${base} (partial ${formatUsd(point.filledNotional, true)})`;
+  const value =
+    unit === "pct"
+      ? `${(point.slippageBps / 100).toFixed(4)}%`
+      : `${point.slippageBps.toFixed(2)} bps`;
+
+  if (point.filled) return value;
+  return `${value} (partial ${formatUsd(point.filledNotional, true)})`;
 }
 
-export function DataTable({ statuses }: DataTableProps) {
+export function DataTable({ statuses, ticker, lastRefreshAt, spreadUnit, onToggleUnit }: DataTableProps) {
   return (
     <section className="panel">
-      <div className="mb-4 space-y-1">
-        <p className="label">Detailed analytics</p>
-        <h3 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Slippage Breakdown</h3>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <p className="label">Detailed analytics</p>
+          <h3 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">{ticker} Slippage Breakdown</h3>
+          <p className="text-sm text-[var(--text-secondary)]">Spread and execution depth for six venues, refreshed every 1.5s.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onToggleUnit}
+            className="rounded-lg border border-[color:var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition hover:border-[color:var(--border-strong)] hover:text-[var(--text-primary)]"
+          >
+            {spreadUnit === "bps" ? "Show %" : "Show bps"}
+          </button>
+          <PulseDot timestamp={lastRefreshAt} />
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-[color:var(--border)]">
@@ -49,12 +71,24 @@ export function DataTable({ statuses }: DataTableProps) {
           <tbody>
             {EXCHANGES.map((exchange) => {
               const analysis = statuses[exchange].analysis;
+              const rowHoverStyle = {
+                "--exchange-row-hover": `${EXCHANGE_COLORS[exchange]}3d`,
+              } as CSSProperties;
 
               return (
-                <tr key={exchange} className="border-b border-[color:var(--border)] last:border-0">
-                  <td className="px-3 py-3">
+                <tr
+                  key={exchange}
+                  className="group border-b border-[color:var(--border)] transition-colors hover:bg-[color:var(--exchange-row-hover)] last:border-0"
+                  style={rowHoverStyle}
+                >
+                  <td className="px-3 py-3 transition-colors group-hover:bg-[color:var(--exchange-row-hover)]">
                     <div className="space-y-1">
                       <p className="font-medium text-[var(--text-primary)]">{EXCHANGE_LABELS[exchange]}</p>
+                      {exchange === "hyperliquid" && analysis?.meta?.isAggregatedEstimate ? (
+                        <p className="text-xs text-[var(--warning)]">
+                          Aggregated estimate (nSigFigs={analysis.meta.hyperliquidNSigFigs ?? 4})
+                        </p>
+                      ) : null}
                       {statuses[exchange].error ? <p className="text-xs text-[var(--danger)]">{statuses[exchange].error}</p> : null}
                     </div>
                   </td>
@@ -65,11 +99,11 @@ export function DataTable({ statuses }: DataTableProps) {
 
                     return (
                       <Fragment key={`${exchange}-${tier}`}>
-                        <td className={`data-mono px-3 py-3 text-center ${bidPoint && !bidPoint.filled ? "text-[var(--warning)]" : "text-[var(--text-secondary)]"}`}>
-                          {renderCell(bidPoint)}
+                        <td className={`data-mono px-3 py-3 text-center transition-colors group-hover:bg-[color:var(--exchange-row-hover)] ${bidPoint && !bidPoint.filled ? "text-[var(--warning)]" : "text-[var(--text-secondary)]"}`}>
+                          {renderCell(bidPoint, spreadUnit)}
                         </td>
-                        <td className={`data-mono px-3 py-3 text-center ${askPoint && !askPoint.filled ? "text-[var(--warning)]" : "text-[var(--text-secondary)]"}`}>
-                          {renderCell(askPoint)}
+                        <td className={`data-mono px-3 py-3 text-center transition-colors group-hover:bg-[color:var(--exchange-row-hover)] ${askPoint && !askPoint.filled ? "text-[var(--warning)]" : "text-[var(--text-secondary)]"}`}>
+                          {renderCell(askPoint, spreadUnit)}
                         </td>
                       </Fragment>
                     );
@@ -83,6 +117,9 @@ export function DataTable({ statuses }: DataTableProps) {
 
       <p className="mt-3 text-xs text-[var(--text-muted)]">
         Amber cells indicate partial fills where available depth could not satisfy the full target notional.
+      </p>
+      <p className="mt-1 text-xs text-[var(--text-muted)]">
+        Hyperliquid may auto-switch to coarser aggregation when fine view (nSigFigs=5) is partial; this is a bucketed estimate, not deeper raw levels.
       </p>
     </section>
   );

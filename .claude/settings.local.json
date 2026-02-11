@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx next build:*)",
+      "Bash(npx tsc:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(taskkill:*)",
+      "Bash(npm run dev:*)",
+      "Bash(curl:*)",
+      "Bash(node -e:*)",
+      "Bash(node scripts/visualize-schema.mjs:*)",
+      "Bash(node:*)",
+      "WebSearch",
+      "WebFetch(domain:apidocs.lighter.xyz)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:bybit-exchange.github.io)",
+      "WebFetch(domain:hyperliquid.gitbook.io)",
+      "WebFetch(domain:docs.lighter.xyz)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:docs.dydx.exchange)",
+      "WebFetch(domain:help.dydx.trade)",
+      "WebFetch(domain:docs.dydx.xyz)"
+    ]
+  }
+}

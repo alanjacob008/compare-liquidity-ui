@@ -1,15 +1,23 @@
 "use client";
 
 import { EXCHANGES, EXCHANGE_COLORS, EXCHANGE_LABELS } from "@/lib/constants";
-import { formatBps, formatPrice } from "@/lib/format";
-import type { ExchangeRecord, ExchangeStatus } from "@/lib/types";
+import { formatPrice } from "@/lib/format";
+import type { ExchangeRecord, ExchangeStatus, SpreadUnit, TickerKey } from "@/lib/types";
 import { PulseDot } from "./pulse-dot";
 
 interface SpreadCardsProps {
   statuses: ExchangeRecord<ExchangeStatus>;
+  ticker: TickerKey;
+  spreadUnit: SpreadUnit;
 }
 
-export function SpreadCards({ statuses }: SpreadCardsProps) {
+function formatSpread(bps: number, unit: SpreadUnit): string {
+  if (!Number.isFinite(bps)) return "--";
+  if (unit === "pct") return `${(bps / 100).toFixed(4)}%`;
+  return `${bps.toFixed(2)} bps`;
+}
+
+export function SpreadCards({ statuses, ticker, spreadUnit }: SpreadCardsProps) {
   return (
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {EXCHANGES.map((exchange) => {
@@ -22,7 +30,10 @@ export function SpreadCards({ statuses }: SpreadCardsProps) {
 
             <div className="space-y-3 p-4">
               <div className="flex items-start justify-between gap-2">
-                <h3 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">{EXCHANGE_LABELS[exchange]}</h3>
+                <div>
+                  <h3 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">{EXCHANGE_LABELS[exchange]}</h3>
+                  <span className="data-mono text-xs text-[var(--text-muted)]">{ticker}-PERP</span>
+                </div>
                 <PulseDot timestamp={status.lastUpdated} />
               </div>
 
@@ -34,7 +45,7 @@ export function SpreadCards({ statuses }: SpreadCardsProps) {
                   </div>
                   <div>
                     <p className="label">Spread</p>
-                    <p className="mt-1 text-[var(--text-primary)]">{formatBps(analysis.spreadBps)}</p>
+                    <p className="mt-1 text-[var(--text-primary)]">{formatSpread(analysis.spreadBps, spreadUnit)}</p>
                   </div>
                   <div>
                     <p className="label">Best Bid</p>

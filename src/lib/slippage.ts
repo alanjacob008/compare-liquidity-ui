@@ -63,11 +63,13 @@ export function analyzeBook({
   exchange,
   book,
   collectedAt = new Date(),
+  meta,
 }: {
   ticker: TickerKey;
   exchange: ExchangeKey;
   book: NormalizedBook;
   collectedAt?: Date;
+  meta?: LiquidityAnalysis["meta"];
 }): LiquidityAnalysis {
   if (book.bids.length === 0 || book.asks.length === 0) {
     throw new Error(`Empty order book for ${exchange}`);
@@ -91,5 +93,6 @@ export function analyzeBook({
     spreadBps: round(spreadBps, 2),
     bids: NOTIONAL_TIERS.map((tier) => computeSlippage(book.bids, tier, midPrice, "bid")),
     asks: NOTIONAL_TIERS.map((tier) => computeSlippage(book.asks, tier, midPrice, "ask")),
+    meta,
   };
 }

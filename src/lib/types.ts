@@ -1,5 +1,5 @@
 export type ExchangeKey = "hyperliquid" | "dydx" | "lighter" | "asterdex" | "binance" | "bybit";
-export type TickerKey = "BTC" | "ETH" | "SOL";
+export type TickerKey = string;
 export type BookSide = "bid" | "ask";
 
 export interface BookLevel {
@@ -33,6 +33,10 @@ export interface LiquidityAnalysis {
   spreadBps: number;
   bids: SlippageResult[];
   asks: SlippageResult[];
+  meta?: {
+    isAggregatedEstimate?: boolean;
+    hyperliquidNSigFigs?: number;
+  };
 }
 
 export interface ExchangeStatus {
@@ -44,3 +48,5 @@ export interface ExchangeStatus {
 }
 
 export type ExchangeRecord<T> = Record<ExchangeKey, T>;
+
+export type SpreadUnit = "bps" | "pct";

@@ -25,6 +25,15 @@ let lighterMarketCache:
     }
   | null = null;
 
+type HyperliquidBookOptions = {
+  nSigFigs?: 2 | 3 | 4 | 5;
+  mantissa?: 1 | 2 | 5;
+};
+
+type FetchOrderbookOptions = {
+  hyperliquid?: HyperliquidBookOptions;
+};
+
 function withProxy(url: string): string {
   if (!PROXY_PREFIX) return url;
   return `${PROXY_PREFIX}${encodeURIComponent(url)}`;
@@ -76,21 +85,32 @@ async function resolveLighterMarketId(symbol: string): Promise<number> {
   return marketId;
 }
 
-export async function fetchOrderbookRaw(exchange: ExchangeKey, ticker: TickerKey): Promise<unknown> {
+export async function fetchOrderbookRaw(exchange: ExchangeKey, ticker: TickerKey, options?: FetchOrderbookOptions): Promise<unknown> {
   const symbol = TICKER_MAP[ticker][exchange];
 
   switch (exchange) {
-    case "hyperliquid":
+    case "hyperliquid": {
+      const hyperliquid = options?.hyperliquid;
+      const body: {
+        type: "l2Book";
+        coin: string;
+        nSigFigs?: 2 | 3 | 4 | 5;
+        mantissa?: 1 | 2 | 5;
+      } = {
+        type: "l2Book",
+        coin: symbol,
+      };
+      if (hyperliquid?.nSigFigs !== undefined) body.nSigFigs = hyperliquid.nSigFigs;
+      if (hyperliquid?.mantissa !== undefined) body.mantissa = hyperliquid.mantissa;
+
       return requestJson(HYPERLIQUID_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          type: "l2Book",
-          coin: symbol,
-        }),
+        body: JSON.stringify(body),
       });
+    }
     case "dydx":
       return requestJson(`${DYDX_BASE_URL}/orderbooks/perpetualMarket/${encodeURIComponent(symbol)}`);
     case "lighter": {
