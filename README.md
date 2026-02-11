@@ -45,6 +45,15 @@ NEXT_PUBLIC_HTTP_PROXY_PREFIX="https://your-proxy.example.com/?url="
 
 The proxy must accept a URL-encoded upstream URL appended to the prefix.
 
+
+## Hyperliquid depth + data accuracy
+
+For Hyperliquid `l2Book`, the response is effectively capped at around 20 levels per side.
+
+- We keep high-granularity parameters (`nSigFigs: 5`, `mantissa: 2`) to preserve price precision at available depth.
+- We do **not** synthesize extra levels, because artificial interpolation can distort slippage/spread quality.
+- If deeper true depth is required, the next step is a dedicated Hyperliquid streaming/deeper-book integration rather than fabricating levels in UI logic.
+
 ## Local development
 
 ```bash
