@@ -8,6 +8,7 @@ export interface TrackedTickerDefinition {
   canonicalQuote: QuoteCurrency;
   quoteByExchange?: Partial<ExchangeRecord<QuoteCurrency>>;
   symbolByExchange?: Partial<ExchangeRecord<string>>;
+  excludedExchanges?: ExchangeKey[];
 }
 
 type ExchangeSymbolConfig = {
@@ -82,6 +83,18 @@ export const TRACKED_TICKER_DEFINITIONS: Record<TickerKey, TrackedTickerDefiniti
   BNB: {
     base: "BNB",
     canonicalQuote: "USD",
+  },
+  BONK: {
+    base: "BONK",
+    canonicalQuote: "USD",
+    symbolByExchange: {
+      hyperliquid: "kBONK",
+      dydx: "BONK-USD",
+      lighter: "1000BONK",
+      asterdex: "1000BONKUSDT",
+      binance: "1000BONKUSDT",
+      bybit: "1000BONKUSDT",
+    },
   },
   BTC: {
     base: "BTC",
@@ -190,6 +203,18 @@ export const TRACKED_TICKER_DEFINITIONS: Record<TickerKey, TrackedTickerDefiniti
   OP: {
     base: "OP",
     canonicalQuote: "USD",
+  },
+  PAXG: {
+    base: "PAXG",
+    canonicalQuote: "USD",
+    symbolByExchange: {
+      hyperliquid: "PAXG",
+      dydx: "PAXG-USD",
+      lighter: "PAXG",
+      binance: "PAXGUSDT",
+      bybit: "PAXGUSDT",
+    },
+    excludedExchanges: ["asterdex"],
   },
   PENDLE: {
     base: "PENDLE",
@@ -406,6 +431,12 @@ export function resolveExchangeSymbol(exchange: ExchangeKey, ticker: TickerKey):
   return formatSymbol(pair.base, quote, exchangeConfig.style);
 }
 
+export function isTickerSupportedOnExchange(ticker: TickerKey, exchange: ExchangeKey): boolean {
+  const pair = TRACKED_TICKER_DEFINITIONS[ticker];
+  if (!pair) return false;
+  return !pair.excludedExchanges?.includes(exchange);
+}
+
 function buildExchangeSymbolRecord(ticker: TickerKey): ExchangeRecord<string> {
   return {
     hyperliquid: resolveExchangeSymbol("hyperliquid", ticker),
@@ -457,8 +488,17 @@ export type PairMappingRow = {
 };
 
 export function listPairMappings(tickers: readonly TickerKey[]): PairMappingRow[] {
-  return tickers.map((ticker) => ({
-    ticker,
-    symbols: buildExchangeSymbolRecord(ticker),
-  }));
+  return tickers.map((ticker) => {
+    const symbols = buildExchangeSymbolRecord(ticker);
+    const pair = TRACKED_TICKER_DEFINITIONS[ticker];
+
+    for (const exchange of pair.excludedExchanges ?? []) {
+      symbols[exchange] = "N/A";
+    }
+
+    return {
+      ticker,
+      symbols,
+    };
+  });
 }

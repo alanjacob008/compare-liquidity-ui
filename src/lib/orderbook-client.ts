@@ -1,4 +1,5 @@
 import { TICKER_MAP } from "./constants";
+import { isTickerSupportedOnExchange } from "./pair-mapping";
 import type { ExchangeKey, TickerKey } from "./types";
 
 const HYPERLIQUID_URL = "https://api.hyperliquid.xyz/info";
@@ -86,6 +87,10 @@ export async function resolveLighterMarketId(symbol: string): Promise<number> {
 }
 
 export async function fetchOrderbookRaw(exchange: ExchangeKey, ticker: TickerKey, options?: FetchOrderbookOptions): Promise<unknown> {
+  if (!isTickerSupportedOnExchange(ticker, exchange)) {
+    throw new Error(`${exchange} does not list ${ticker}`);
+  }
+
   const symbol = TICKER_MAP[ticker][exchange];
 
   switch (exchange) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isExchangeKey, isTickerKey, TICKER_MAP } from "@/lib/constants";
+import { isTickerSupportedOnExchange } from "@/lib/pair-mapping";
 import type { ExchangeKey } from "@/lib/types";
 
 const HYPERLIQUID_URL = "https://api.hyperliquid.xyz/info";
@@ -123,6 +124,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const ticker = tickerParam.toUpperCase();
   if (!isTickerKey(ticker)) {
     return badRequest(`Unknown ticker: ${tickerParam}`);
+  }
+
+  if (!isTickerSupportedOnExchange(ticker, exchangeParam)) {
+    return badRequest(`Ticker ${ticker} is not listed on ${exchangeParam}`);
   }
 
   const symbol = TICKER_MAP[ticker][exchangeParam];

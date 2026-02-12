@@ -5,6 +5,7 @@ import { EXCHANGES, NOTIONAL_TIERS, POLL_INTERVAL_MS } from "@/lib/constants";
 import { EXCHANGE_REGISTRY } from "@/lib/exchanges";
 import { fetchLighterBookWs } from "@/lib/lighter-ws";
 import { fetchOrderbookRaw } from "@/lib/orderbook-client";
+import { isTickerSupportedOnExchange } from "@/lib/pair-mapping";
 import { analyzeBook } from "@/lib/slippage";
 import type { ExchangeKey, ExchangeRecord, ExchangeStatus, LiquidityAnalysis, NormalizedBook, SlippageResult, TickerKey } from "@/lib/types";
 
@@ -177,20 +178,26 @@ export function useLiquidityPoll(ticker: TickerKey): {
     const poll = async () => {
       if (inFlightRef.current) return;
       inFlightRef.current = true;
+      const supportedExchanges = EXCHANGES.filter((exchange) => isTickerSupportedOnExchange(ticker, exchange));
 
       setStatuses((prev) => {
         const next = { ...prev };
         for (const exchange of EXCHANGES) {
+          const isSupported = supportedExchanges.includes(exchange);
           next[exchange] = {
             ...next[exchange],
-            loading: true,
+            loading: isSupported,
+            error: null,
+            analysis: isSupported ? next[exchange].analysis : null,
+            book: isSupported ? next[exchange].book : null,
+            lastUpdated: isSupported ? next[exchange].lastUpdated : null,
           };
         }
         return next;
       });
 
       const settled = await Promise.allSettled(
-        EXCHANGES.map(async (exchange): Promise<PollOutcome> => {
+        supportedExchanges.map(async (exchange): Promise<PollOutcome> => {
           if (exchange === "hyperliquid") {
             return pollHyperliquid(ticker);
           }
@@ -216,7 +223,7 @@ export function useLiquidityPoll(ticker: TickerKey): {
         const next = { ...prev };
 
         settled.forEach((result, index) => {
-          const exchange = EXCHANGES[index];
+          const exchange = supportedExchanges[index];
 
           if (result.status === "fulfilled") {
             const { analysis, book } = result.value;
@@ -262,8 +269,12 @@ export function useLiquidityPoll(ticker: TickerKey): {
   );
 
   const isLoading = useMemo(
-    () => EXCHANGES.every((exchange) => statuses[exchange].loading && !statuses[exchange].analysis),
-    [statuses]
+    () => {
+      const supported = EXCHANGES.filter((exchange) => isTickerSupportedOnExchange(ticker, exchange));
+      if (supported.length === 0) return false;
+      return supported.every((exchange) => statuses[exchange].loading && !statuses[exchange].analysis);
+    },
+    [statuses, ticker]
   );
 
   return {
