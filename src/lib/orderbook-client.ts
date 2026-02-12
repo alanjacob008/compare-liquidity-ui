@@ -72,7 +72,7 @@ async function refreshLighterMarketCache(): Promise<void> {
   };
 }
 
-async function resolveLighterMarketId(symbol: string): Promise<number> {
+export async function resolveLighterMarketId(symbol: string): Promise<number> {
   if (!lighterMarketCache || lighterMarketCache.expiresAt < Date.now()) {
     await refreshLighterMarketCache();
   }
@@ -122,7 +122,7 @@ export async function fetchOrderbookRaw(exchange: ExchangeKey, ticker: TickerKey
     case "binance":
       return requestJson(`${BINANCE_BASE_URL}/fapi/v1/depth?symbol=${encodeURIComponent(symbol)}&limit=1000`);
     case "bybit":
-      return requestJson(`${BYBIT_BASE_URL}/v5/market/orderbook?category=linear&symbol=${encodeURIComponent(symbol)}&limit=500`);
+      return requestJson(`${BYBIT_BASE_URL}/v5/market/orderbook?category=linear&symbol=${encodeURIComponent(symbol)}&limit=1000`);
     default:
       throw new Error(`Unsupported exchange: ${String(exchange)}`);
   }

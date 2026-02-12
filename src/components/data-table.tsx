@@ -3,8 +3,28 @@
 import { Fragment, type CSSProperties } from "react";
 import { EXCHANGES, EXCHANGE_COLORS, EXCHANGE_LABELS, NOTIONAL_TIERS } from "@/lib/constants";
 import { formatTier, formatUsd } from "@/lib/format";
-import type { ExchangeRecord, ExchangeStatus, SlippageResult, SpreadUnit, TickerKey } from "@/lib/types";
+import type { ExchangeRecord, ExchangeStatus, LiquidityAnalysis, SlippageResult, SpreadUnit, TickerKey } from "@/lib/types";
 import { PulseDot } from "./pulse-dot";
+
+function formatHyperliquidMeta(analysis: LiquidityAnalysis): string {
+  const perTier = analysis.meta?.hyperliquidNSigFigsPerTier;
+  if (!perTier) {
+    return `Aggregated estimate (nSigFigs ${analysis.meta?.hyperliquidNSigFigs ?? 4})`;
+  }
+
+  // Group consecutive tiers that switched away from nSigFigs=5
+  // e.g. [5, 5, 4, 3] → "$100K: nSigFigs 4 · $1M: nSigFigs 3"
+  const parts: string[] = [];
+  for (let i = 0; i < perTier.length; i++) {
+    if (perTier[i] < 5) {
+      const tier = NOTIONAL_TIERS[i];
+      parts.push(`${formatTier(tier)}: nSigFigs ${perTier[i]}`);
+    }
+  }
+
+  if (parts.length === 0) return "";
+  return `Coarser depth used — ${parts.join(" · ")}`;
+}
 
 interface DataTableProps {
   statuses: ExchangeRecord<ExchangeStatus>;
@@ -86,7 +106,12 @@ export function DataTable({ statuses, ticker, lastRefreshAt, spreadUnit, onToggl
                       <p className="font-medium text-[var(--text-primary)]">{EXCHANGE_LABELS[exchange]}</p>
                       {exchange === "hyperliquid" && analysis?.meta?.isAggregatedEstimate ? (
                         <p className="text-xs text-[var(--warning)]">
-                          Aggregated estimate (nSigFigs={analysis.meta.hyperliquidNSigFigs ?? 4})
+                          {formatHyperliquidMeta(analysis)}
+                        </p>
+                      ) : null}
+                      {exchange === "lighter" && analysis?.meta?.lighterWsFallback ? (
+                        <p className="text-xs text-[var(--warning)]">
+                          Switched to WebSocket depth (REST API capped at 250 orders)
                         </p>
                       ) : null}
                       {statuses[exchange].error ? <p className="text-xs text-[var(--danger)]">{statuses[exchange].error}</p> : null}
@@ -120,6 +145,9 @@ export function DataTable({ statuses, ticker, lastRefreshAt, spreadUnit, onToggl
       </p>
       <p className="mt-1 text-xs text-[var(--text-muted)]">
         Hyperliquid may auto-switch to coarser aggregation when fine view (nSigFigs=5) is partial; this is a bucketed estimate, not deeper raw levels.
+      </p>
+      <p className="mt-1 text-xs text-[var(--text-muted)]">
+        Lighter REST API is capped at 250 orders per side; when partial, the app switches to a WebSocket snapshot for full book depth.
       </p>
     </section>
   );

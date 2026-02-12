@@ -1,331 +1,521 @@
-# Historical Data Collection Plan
+# Standalone Historical Liquidity Ingestion Plan
 
-## Goal
-Collect and store liquidity data (spread, slippage) for multiple pairs across 6 exchanges using GitHub Actions. Store as CSV in the repo for easy viewing and future PostgreSQL import.
+Last updated: 2026-02-12
 
----
+## 1) Goal
 
-## Pairs Support
+Build and operate a standalone ingestion repository that continuously collects order book liquidity metrics and stores minute-level historical data for:
 
-### Current
-- BTC, ETH, SOL (3 tickers × 6 exchanges)
+- Exchanges: `hyperliquid`, `dydx`, `lighter`, `asterdex`, `binance`, `bybit`
+- Initial tickers: `BTC`, `ETH`, `SOL` (config-driven to scale later)
 
-### Extensible Design
-- Pairs list defined in a config file (`scripts/config.json` or similar)
-- Adding a new pair = add one entry to the config
-- Each exchange has its own symbol mapping (already exists in `TICKER_MAP`)
-
-### Config example
-```json
-{
-  "pairs": ["BTC", "ETH", "SOL"],
-  "exchanges": ["hyperliquid", "dydx", "lighter", "asterdex", "binance", "bybit"],
-  "samples_per_minute": 3,
-  "run_duration_minutes": 15
-}
-```
-
-### Questions
-- Do we want to support non-perp pairs later (spot)?
-- Any pairs beyond BTC/ETH/SOL to add now?
+The ingestion repo should preserve metric semantics already validated in the existing codebase (slippage math, Hyperliquid depth strategy, Lighter REST->WebSocket fallback).
 
 ---
 
-## GitHub Action Strategy
+## 2) Non-goals
 
-### The Problem
-- GitHub Actions cron minimum is every 5 minutes
-- But we want dense data (1-min medians)
-- We also don't want to hit rate limits
-
-### The Approach: Long-running Action with chained dispatch
-
-**Each run:**
-1. Action starts
-2. Runs a Node script for **15 minutes**
-3. Every minute within those 15 min:
-   - Fetch each exchange 3 times (~5s apart)
-   - Compute median of the 3 fetches
-   - That's 1 row per exchange per ticker per minute
-4. After 15 min, write all rows to CSV, commit, push
-5. At the end, trigger the next run via `workflow_dispatch`
-
-**This gives us:**
-- 15 median rows per exchange per ticker per run
-- Continuous back-to-back runs (no gaps)
-- 1 commit every 15 min (not every minute — cleaner git history)
-- No cron schedule needed after the first trigger
-
-### Rows per run
-```
-15 minutes × 3 tickers × 6 exchanges = 270 rows per run
-```
-
-### Rows per day
-```
-96 runs × 270 rows = 25,920 rows/day
-```
-
-### Chaining: How it works
-```
-Run N starts
-  → collects for 15 min
-  → commits CSV
-  → calls: gh workflow run collect.yml
-Run N+1 starts immediately
-  → repeats
-```
-
-### Safety
-- Add a `COLLECT_ENABLED` repo variable — set to `false` to stop the chain
-- Max runtime guard: if Action has been running > 20 min, abort
-- If a run fails, cron backup kicks in (every 30 min) to restart the chain
-
-### Rate Limits
-- GitHub Actions: 1,000 API requests per hour per repo — we use ~4 per run (checkout, commit, push, dispatch) = ~16/hour, well within limits
-- Exchange APIs: 3 fetches × 6 exchanges × 3 tickers × 15 min = 810 fetches/run. All exchanges allow this easily.
-
-### Questions
-- Should we add a cooldown between runs (e.g., 1 min gap)?
-- Do we want to keep running 24/7 or only during certain hours?
+- No UI work in this plan.
+- No dependency on Next.js client/runtime behavior.
+- No requirement to keep ingestion logic inside the UI repo.
 
 ---
 
-## Data Collection: 1-Minute Median
+## 3) Source-of-truth Logic To Port (Exact Behavior)
 
-### Within each minute
-1. Fetch orderbook 3 times, ~15-20s apart
-2. For each fetch, compute: mid_price, best_bid, best_ask, spread_bps, slippage at 4 tiers
-3. Take **median** of the 3 values for each field
-4. Output 1 row
+The ingestion implementation should mirror these behaviors exactly:
 
-### Why median
-- Filters outliers (one bad fetch doesn't corrupt the row)
-- More stable than single snapshot
-- 3 samples is enough — median of 3 = the middle value
+- `src/lib/slippage.ts`
+- `src/lib/orderbook-client.ts`
+- `src/lib/exchanges/*.ts`
+- `src/lib/lighter-ws.ts`
+- `src/hooks/use-liquidity-poll.ts` (for exchange orchestration behavior)
+- `src/lib/constants.ts`
+- `src/lib/pair-mapping.ts`
 
-### Timing within a minute
-```
-t=0s   fetch #1
-t=20s  fetch #2
-t=40s  fetch #3
-t=55s  compute median, store row
-t=60s  next minute starts
-```
+### 3.1 Notional tiers
+
+Default tiers (ascending): `[1000, 10000, 100000, 1000000]`
+
+### 3.2 Book normalization rules
+
+For every exchange parser:
+
+- Parse numeric fields to floats.
+- Drop invalid levels (`NaN`, non-finite, `<= 0` price or size).
+- Sort bids descending by price.
+- Sort asks ascending by price.
+- Reject empty-side books.
+
+### 3.3 Slippage computation rules
+
+For each side and target notional:
+
+1. Walk levels from best price outward.
+2. Fill notional until exhausted or levels end.
+3. `vwap = totalCost / totalQty` when `totalQty > 0`, else `0`.
+4. `filled = remainingNotional <= 0`.
+5. `filledNotional = totalCost`.
+6. Slippage in bps:
+   - Ask: `((vwap - midPrice) / midPrice) * 10000`
+   - Bid: `((midPrice - vwap) / midPrice) * 10000`
+
+Rounding:
+
+- `midPrice`, `spread`, `vwap`: 6 decimals
+- `slippageBps`: 2 decimals
+- `filledNotional`: 2 decimals
+
+### 3.4 Liquidity metrics per sample
+
+From best bid/ask:
+
+- `bestBid`
+- `bestAsk`
+- `midPrice = (bestBid + bestAsk) / 2`
+- `spreadUsd = bestAsk - bestBid`
+- `spreadBps = (spreadUsd / midPrice) * 10000`
+- Slippage arrays (bid + ask) for each notional tier
 
 ---
 
-## CSV Format
+## 4) Exchange Fetch Strategy
 
-### File structure
-```
-data/
-  2026-02.csv     ← one file per month
-  2026-03.csv
-```
+### 4.1 Endpoints
 
-### Why monthly files
-- ~25K rows/day × 30 days = ~780K rows/month
-- ~200 bytes/row = ~156 MB/month — TOO BIG for GitHub
+- Hyperliquid: `POST https://api.hyperliquid.xyz/info` with `{ type: "l2Book", coin, nSigFigs? }`
+- dYdX: `GET https://indexer.dydx.trade/v4/orderbooks/perpetualMarket/{symbol}`
+- Lighter REST: `GET https://mainnet.zklighter.elliot.ai/api/v1/orderBookOrders?market_id={id}&limit=250`
+- AsterDEX: `GET https://fapi.asterdex.com/fapi/v1/depth?symbol={symbol}&limit=1000`
+- Binance: `GET https://fapi.binance.com/fapi/v1/depth?symbol={symbol}&limit=1000`
+- Bybit: `GET https://api.bybit.com/v5/market/orderbook?category=linear&symbol={symbol}&limit=1000`
 
-### Revised: Daily files
-```
-data/
-  2026-02-12.csv
-  2026-02-13.csv
-```
-- ~25K rows/day × 200 bytes = ~5 MB/day — good for GitHub
-- GitHub renders CSV as a table up to ~512KB displayed (rest downloadable)
+Lighter market IDs must be discovered from:
 
-### Alternative: Daily files, monthly archive
+- `GET https://mainnet.zklighter.elliot.ai/api/v1/orderBooks`
+- Cache symbol->market_id for 5 minutes.
+
+### 4.2 Hyperliquid adaptive strategy (must match current logic)
+
+Use ordered `nSigFigs` attempts: `[5, 4, 3, 2]`.
+
+Algorithm per sample:
+
+1. Fetch/analyze at current `nSigFigs`.
+2. Keep first successful analysis as the base for spread/mid fields.
+3. Fill slippage tiers progressively:
+   - Move bid cursor while `analysis.bids[idx].filled`.
+   - Move ask cursor while `analysis.asks[idx].filled`.
+4. Track:
+   - `coarsestUsed` (lowest nSigFigs used)
+   - `perTierSigFigs` (e.g. `[5, 5, 4, 3]`)
+5. If some tiers remain unfilled after loop:
+   - Use the last successful analysis values for remaining tiers (partial allowed).
+6. Return merged analysis with meta:
+   - `isAggregatedEstimate`
+   - `hyperliquidNSigFigs`
+   - `hyperliquidNSigFigsPerTier`
+
+### 4.3 Lighter REST -> WS fallback strategy (must match current logic)
+
+Algorithm per sample:
+
+1. Fetch/analyze REST order book (`limit=250`).
+2. If any slippage tier on either side is partial (`filled=false`), attempt WS snapshot fallback:
+   - Open one-shot WS to `wss://mainnet.zklighter.elliot.ai/stream`
+   - Subscribe to `order_book/{marketId}`
+   - Capture first snapshot containing `order_book`
+   - Timeout after 8 seconds
+3. If WS success, use WS analysis and set `lighterWsFallback=true`.
+4. If WS fails, keep REST analysis.
+
+If a future mode keeps Lighter WS open (not one-shot snapshot):
+
+- Enforce nonce continuity (`begin_nonce` must match previous `nonce`).
+- Reconnect and resync snapshot on nonce mismatch.
+
+### 4.4 Endpoint constraints and quirks (from `info.md`, validated 2026-02-12)
+
+- Hyperliquid `l2Book` is hard-capped at 20 levels/side. Additional depth params do not increase depth.
+- Lighter REST `limit` has a hard max of 250. Values above 250 return `20001 invalid param`.
+- Lighter REST has no pagination for order book depth.
+- Lighter `total_bids` and `total_asks` fields echo request limit; do not treat them as full depth counts.
+- Bybit linear docs commonly state max 500 levels, but observed behavior returns up to 1000 levels.
+- AsterDEX and Binance are interface-compatible (`/fapi/v1/depth`) and can share adapter patterns.
+- dYdX limits can vary by indexer deployment. Use canonical `indexer.dydx.trade` for baseline behavior.
+
+### 4.5 Rate-limit telemetry headers to capture in logs
+
+Capture these headers per request when present (store in debug logs, not required in CSV):
+
+- Binance/AsterDEX: `X-MBX-USED-WEIGHT-1m`
+- Bybit: `X-Bapi-Limit-Status`, `X-Bapi-Limit-Reset-Timestamp`
+- dYdX: `ratelimit-limit`, `ratelimit-remaining`, `ratelimit-reset`
+
+Note:
+
+- Hyperliquid and Lighter do not reliably expose rate headers for this use case; infer pressure from status codes and latency trends.
+
+### 4.6 Throughput planning and guardrails
+
+At `3 samples/minute`, each `exchange x ticker` consumes `3` requests/minute.
+
+Planning rules:
+
+- Compute projected request or weight usage at startup.
+- Warn at `>= 80%` projected budget usage.
+- Hard-block config at `>= 100%` projected budget usage unless explicit override is set.
+
+Important note from `info.md`:
+
+- Request weight for Binance and AsterDEX depends on depth limit.
+- Capacity estimates change materially between `limit=100` and `limit=1000`.
+- Keep depth limit configurable per exchange and include it in budget calculations.
+
+---
+
+## 5) Symbol Mapping And Coverage
+
+Symbol mapping should be config-driven, using the same semantics as `src/lib/pair-mapping.ts`:
+
+- Canonical ticker definition with optional per-exchange quote overrides
+- Optional manual per-exchange symbol override
+- Exchange symbol styles:
+  - `baseOnly` (e.g. Hyperliquid, Lighter)
+  - `baseDashQuote` (e.g. dYdX)
+  - `baseQuote` (e.g. Binance, Bybit, AsterDEX)
+
+Initial run set:
+
+- Tickers: `BTC`, `ETH`, `SOL`
+- Exchanges: all 6 above
+
+---
+
+## 6) Sampling Model
+
+### 6.1 Minute window
+
+Default:
+
+- `samples_per_minute = 3`
+- Offsets: `0s`, `20s`, `40s`
+
+For each minute/ticker/exchange:
+
+1. Collect 3 samples.
+2. Compute 1 minute aggregate row (median for numeric fields).
+
+Scheduling guidance:
+
+- Keep per-minute offsets deterministic.
+- Stagger exchange requests within each offset window (small jitter) to reduce burst collisions at scale.
+
+### 6.2 Aggregation rules
+
+Numeric fields:
+
+- Median across successful samples only.
+
+Boolean fields:
+
+- Majority vote (`true` count > `false` count), tie -> `false`.
+
+Meta fields:
+
+- `lighterWsFallback`: `true` if any successful sample used WS.
+- `hyperliquidNSigFigs`: minimum across successful samples.
+- `hyperliquidNSigFigsPerTier`: per-tier minimum across successful samples.
+- `isAggregatedEstimate`: `true` if any successful sample is aggregated.
+
+Timestamp/error fields:
+
+- `book_timestamp_ms`: median of successful sample book timestamps (rounded to integer).
+- `collected_at_utc`: minute bucket close time in UTC (`YYYY-MM-DDTHH:MM:00Z`).
+- `error`: empty when `samples_success > 0`; populated summary when `samples_success = 0`.
+
+If zero successful samples for a minute:
+
+- Write row with null metrics and populated `error`.
+
+---
+
+## 7) Output Data Model
+
+Use one wide CSV row per `minute x exchange x ticker`.
+
+Required columns:
+
+`ts_minute_utc,exchange,ticker,symbol,samples_total,samples_success,book_timestamp_ms,collected_at_utc,mid_price,best_bid,best_ask,spread_usd,spread_bps,ask_slip_1k,ask_slip_10k,ask_slip_100k,ask_slip_1m,bid_slip_1k,bid_slip_10k,bid_slip_100k,bid_slip_1m,ask_fill_1k,ask_fill_10k,ask_fill_100k,ask_fill_1m,bid_fill_1k,bid_fill_10k,bid_fill_100k,bid_fill_1m,ask_filled_notional_1m,bid_filled_notional_1m,is_aggregated_estimate,hyperliquid_n_sig_figs,hyperliquid_n_sig_figs_per_tier,lighter_ws_fallback,error`
+
+Notes:
+
+- `hyperliquid_n_sig_figs_per_tier` stored as compact JSON string (example: `[5,5,4,3]`).
+- `error` empty on success.
+- Rows must be idempotent on key: `(ts_minute_utc, exchange, ticker)`.
+
+---
+
+## 8) Storage Layout
+
+Recommended daily partitioning:
+
 ```
 data/
   daily/
-    2026-02-12.csv    ← current day (appended to)
-    2026-02-13.csv
+    YYYY-MM-DD.csv
+  logs/
+    YYYY-MM-DD/
+      run-<run_id>.jsonl
   archive/
-    2026-02.csv.gz    ← compressed monthly rollup
+    YYYY-MM.csv.gz
 ```
 
-### Questions
-- Daily files vs monthly files?
-- Compress old files or keep raw?
-- GitHub has a soft limit of 1GB repo size — at 5MB/day that's ~200 days before concern. Should we plan for cleanup?
+Policy:
+
+- Append minute rows to current day file.
+- Optional monthly compression job moves old daily files into `archive`.
 
 ---
 
-## CSV Schema
+## 9) Runtime And Scheduling
+
+### 9.1 Runtime modes
+
+Provide both:
+
+- `collect:once` (single bounded run)
+- `collect:daemon` (continuous local process)
+- `collect:backfill --from --to` (historical replay windows)
+
+### 9.2 GitHub Actions mode (optional but supported)
+
+Bounded run pattern:
+
+- Duration: 15 minutes
+- Timeout guard: 20 minutes
+- At run end: commit and push `data/`
+- Optional chaining via `workflow_dispatch`
+- Kill switch variable: `COLLECT_ENABLED`
+- Backup schedule: every 30 minutes to restart if chain breaks
+
+### 9.3 Configuration contract (required)
+
+Example config keys:
+
+- `pairs`: ticker list
+- `exchanges`: exchange list
+- `samples_per_minute`
+- `sample_offsets_sec`
+- `run_duration_minutes`
+- `fetch_timeout_ms`
+- `retry_max_attempts`
+- `retry_backoff_ms`
+- `depth_limit_by_exchange`
+- `rate_limit_guardrails_enabled`
+- `allow_over_budget_override`
+- `enable_lighter_ws_fallback`
+- `enable_hyperliquid_adaptive_sigfigs`
+- `log_level`
+- `log_json`
+- `debug_capture_headers`
+
+Config validation:
+
+- Fail fast if unknown exchange or ticker is configured.
+- Fail fast if offsets count does not match `samples_per_minute`.
+- Fail fast if projected throughput exceeds hard guardrail without override.
+
+---
+
+## 10) Reliability Requirements
+
+Per request:
+
+- Timeout (`fetch_timeout_ms`, default 8-10s)
+- Retry policy (small bounded retries with jitter)
+- Structured error classification (`timeout`, `http_<code>`, `parse_error`, `ws_error`, `unknown`)
+- Capture request latency, response status, and relevant rate-limit headers for every attempt.
+
+Throttle-aware behavior:
+
+- On `429`, apply exponential backoff with jitter per exchange.
+- On Bybit `403` ban signals, apply cool-off window before next Bybit attempt.
+- Maintain per-exchange failure counters and emit warning logs when consecutive failures exceed threshold.
+
+Per minute row:
+
+- Row must still be written when failures occur (timeline continuity).
+- Include `samples_success`, `samples_total`, and `error`.
+- Include concise error summary string when minute is fully failed (first root cause + failure count).
+
+Process-level:
+
+- Prevent overlapping runs for same target partition.
+- Graceful shutdown flushes buffered rows.
+- Add heartbeat log line every minute with processed row count and current lag.
+
+Debug observability requirements:
+
+- Emit structured JSONL logs (one event per line).
+- Include `run_id`, `exchange`, `ticker`, `minute_bucket`, `sample_index`, `stage`, `duration_ms`, `result`, `error_code`.
+- Log Hyperliquid strategy decisions: attempted `nSigFigs`, fill cursor progression, selected per-tier `nSigFigs`.
+- Log Lighter fallback decisions: REST level counts, partial detection, WS fallback attempt, WS success/failure.
+
+---
+
+## 11) Suggested Standalone Repo Layout
 
 ```
-ts,exchange,ticker,mid_price,best_bid,best_ask,spread_usd,spread_bps,ask_slip_1k,ask_slip_10k,ask_slip_100k,ask_slip_1m,bid_slip_1k,bid_slip_10k,bid_slip_100k,bid_slip_1m,ask_1m_filled,bid_1m_filled
-```
-
-### Column types (for future PG import)
-| Column | Type | Notes |
-|---|---|---|
-| ts | TIMESTAMPTZ | ISO 8601, UTC |
-| exchange | TEXT | hyperliquid, dydx, binance, etc. |
-| ticker | TEXT | BTC, ETH, SOL |
-| mid_price | NUMERIC | |
-| best_bid | NUMERIC | |
-| best_ask | NUMERIC | |
-| spread_usd | NUMERIC | |
-| spread_bps | NUMERIC | |
-| ask_slip_1k | NUMERIC | median slippage bps |
-| ask_slip_10k | NUMERIC | |
-| ask_slip_100k | NUMERIC | |
-| ask_slip_1m | NUMERIC | |
-| bid_slip_1k | NUMERIC | |
-| bid_slip_10k | NUMERIC | |
-| bid_slip_100k | NUMERIC | |
-| bid_slip_1m | NUMERIC | |
-| ask_1m_filled | BOOLEAN | false = partial fill at $1M |
-| bid_1m_filled | BOOLEAN | |
-
-### Sample row
-```
-2026-02-12T03:50:00Z,binance,BTC,67535.95,67535.90,67536.00,0.10,0.0148,0.01,0.01,0.07,1.44,0.01,0.01,0.01,1.15,false,true
-```
-
-### PG import (one-liner)
-```sql
-COPY ticks FROM '/path/2026-02-12.csv' CSV HEADER;
+liquidity-ingestion/
+  README.md
+  plan.md
+  package.json
+  config/
+    ingestion.config.json
+  src/
+    main.ts
+    config.ts
+    types.ts
+    pair-mapping.ts
+    constants.ts
+    metrics/
+      slippage.ts
+    exchanges/
+      hyperliquid.ts
+      dydx.ts
+      lighter-rest.ts
+      lighter-ws.ts
+      asterdex.ts
+      binance.ts
+      bybit.ts
+      index.ts
+    ingest/
+      sample-engine.ts
+      minute-aggregate.ts
+      hyperliquid-strategy.ts
+      lighter-strategy.ts
+    storage/
+      csv-writer.ts
+      rotate-archive.ts
+    util/
+      time.ts
+      retry.ts
+      errors.ts
+  .github/workflows/
+    collect.yml
 ```
 
 ---
 
-## Action Workflow File
+## 12) Agent Execution Plan (Implementation Phases)
 
-### Rough structure
-```yaml
-name: Collect Liquidity Data
-on:
-  workflow_dispatch:       # manual trigger + chained trigger
-  schedule:
-    - cron: '0,30 * * * *'  # backup: every 30 min in case chain breaks
+### Phase 1: Core metric parity
 
-jobs:
-  collect:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: node scripts/collect.mjs
-      - name: Commit and push
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add data/
-          git diff --cached --quiet || git commit -m "data: $(date -u +%Y-%m-%dT%H:%M)"
-          git push
-      - name: Chain next run
-        if: vars.COLLECT_ENABLED == 'true'
-        run: gh workflow run collect.yml
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
+- Port slippage and analyze logic exactly.
+- Add deterministic unit tests for:
+  - Full fill
+  - Partial fill
+  - Rounding behavior
 
----
+### Phase 2: Exchange adapters
 
-## Script: collect.mjs
+- Implement fetch + parse for all 6 exchanges.
+- Port Lighter market ID cache.
+- Add parser fixtures and tests.
 
-### Responsibilities
-1. Read config (pairs, exchanges, duration)
-2. Loop for 15 minutes:
-   - Each minute: fetch 3 samples, compute median
-   - Accumulate rows in memory
-3. Append all rows to today's CSV file
-4. Exit
+### Phase 3: Special strategies
 
-### Error handling
-- If an exchange fails all 3 fetches in a minute, write null for that row
-- If ALL exchanges fail, still write the timestamp rows (shows gaps in data)
-- Log errors to stdout (visible in Action logs)
+- Implement Hyperliquid adaptive `nSigFigs` merge strategy.
+- Implement Lighter REST->WS fallback strategy.
+- Add tests for both strategies.
+
+### Phase 4: Minute sampler
+
+- Implement 3-sample/minute loop with offsets.
+- Implement median/minute row aggregation rules.
+- Emit structured errors while preserving rows.
+
+### Phase 5: Persistence and ops
+
+- Implement daily CSV writer and idempotent upsert behavior.
+- Add GitHub Actions workflow with bounded run and kill switch.
+- Add archival/rotation job.
+
+### Phase 6: Backfill and validation
+
+- Implement date-range backfill mode.
+- Add reconciliation script:
+  - row count by day
+  - null/error rate by exchange
+  - duplicate key check
 
 ---
 
-## Decisions Made
+## 13) Acceptance Criteria
 
-1. **Branch**: Dedicated `data` branch (keeps main clean)
-2. **Hours**: 24/7 continuous collection
-3. **Errors**: Write the error string (e.g. "unreachable", "timeout", "rate_limited") in an `error` column for debugging — don't skip the row
-4. **Pairs**: BTC + ETH + SOL to start, config-driven for easy addition
+The ingestion pipeline is considered production-ready when:
 
-## Open Questions
-
-1. **File rotation**: Daily files — when do we archive/compress old ones?
-2. **Repo size**: At 5MB/day, ~1.5GB/year. Plan for cleanup or separate data repo?
-3. ~~**Lighter**~~: Documented limits are strict but empirical testing shows no throttling on public reads. Safe to poll normally.
-4. **Run gap**: Any cooldown between chained runs or back-to-back?
+1. It runs continuously for 24h with no data gap larger than 2 minutes.
+2. Every minute has one row per configured exchange+ticker, even on failures.
+3. Hyperliquid rows include correct aggregate metadata when coarser `nSigFigs` is used.
+4. Lighter rows indicate WS fallback when REST depth is insufficient.
+5. Metric outputs match reference formulas and rounding from source-of-truth logic.
+6. CSV files are parseable and idempotent on `(ts_minute_utc, exchange, ticker)`.
 
 ---
 
-## Rate Limits vs Our Usage
+## 14) Open Decisions
 
-### Per-exchange limits (orderbook endpoint)
-
-| Exchange | Budget | Window | Cost/call | Max calls/min | Our use (3 pairs, 3 samples/min) | Headroom |
-|---|---|---|---|---|---|---|
-| Binance | 2,400 weight | 1 min | 10w (limit=100) | 240 | 90w (9 calls) | 96% free |
-| Bybit | 600 req | 5 sec | 1 req | 7,200/min | 9 calls | 99% free |
-| dYdX | 100 req | 10 sec | 1 req | 600/min | 9 calls | 98% free |
-| Hyperliquid | 1,200 weight | 1 min | 2w | 600 | 18w (9 calls) | 98% free |
-| AsterDEX | 2,400 weight | 1 min | 5w (limit=100) | 480 | 45w (9 calls) | 98% free |
-| Lighter | No limit (anon GETs) | N/A | N/A | 60+ concurrent OK | No concern |
-
-### Scaling: max pairs per exchange
-
-| Exchange | Safe max pairs (3 samples/min) | Bottleneck |
-|---|---|---|
-| Binance | ~80 pairs | Weight budget |
-| Bybit | ~200+ pairs | Effectively unlimited |
-| dYdX | ~80 pairs | 100 req/10s burst |
-| Hyperliquid | ~200 pairs | Weight budget |
-| AsterDEX | ~160 pairs | Weight budget |
-| Lighter | ~200+ pairs | No practical limit on public reads |
-
-**Overall bottleneck at scale**: dYdX and Binance tie at ~80 pairs. Staggering fetches across exchanges pushes this higher.
-
-### Error column for unreachable exchanges
-
-When an exchange fails, the row is still written with prices/slippage as empty and an error column:
-```
-2026-02-12T03:50:00Z,lighter,BTC,,,,,,,,,,,,,,,,unreachable: fetch failed
-2026-02-12T03:50:00Z,asterdex,BTC,,,,,,,,,,,,,,,,timeout after 10s
-```
-
-This preserves the timeline and makes gaps/issues visible in the data.
+1. Retention policy: how many daily CSV files remain uncompressed.
+2. Storage target: keep in Git repo vs separate data bucket/repo long-term.
+3. Default ticker set beyond BTC/ETH/SOL.
+4. Whether to persist per-sample raw rows in addition to minute aggregates.
 
 ---
 
-## Updated CSV Schema
+## 15) Build And Debug Runbook
 
-```
-ts,exchange,ticker,mid_price,best_bid,best_ask,spread_usd,spread_bps,ask_slip_1k,ask_slip_10k,ask_slip_100k,ask_slip_1m,bid_slip_1k,bid_slip_10k,bid_slip_100k,bid_slip_1m,ask_1m_filled,bid_1m_filled,error
-```
+Use this runbook during implementation and incident triage.
 
-Added `error` column (empty on success, error string on failure).
+### 15.1 Adapter bring-up checklist
 
----
+1. Verify endpoint request/response contract with direct HTTP call.
+2. Confirm parser output has sorted bids/asks and non-empty sides.
+3. Record sample response fixture for regression tests.
+4. Verify slippage outputs on fixture with deterministic expected values.
 
-## Summary
+### 15.2 Strategy-specific checks
 
-| Item | Decision |
-|---|---|
-| Frequency | 1-min medians (3 samples/min) |
-| Run duration | 15 min per Action run |
-| Chaining | workflow_dispatch at end of each run |
-| Backup | Cron every 30 min |
-| Pairs | BTC, ETH, SOL (configurable) |
-| Exchanges | 6 (skip unreachable gracefully, log error) |
-| File format | CSV, one per day |
-| Branch | `data` branch (dedicated) |
-| Hours | 24/7 |
-| Rows/run | 270 (15 min × 3 tickers × 6 exchanges) |
-| Rows/day | ~25,920 |
-| Size/day | ~5 MB |
-| Kill switch | `COLLECT_ENABLED` repo variable |
-| Error handling | Write error string in `error` column, keep row |
+Hyperliquid checks:
+
+1. Validate base sample at `nSigFigs=5` succeeds for liquid ticker.
+2. Validate adaptive fallback path when deeper tiers become partial.
+3. Confirm emitted meta includes `hyperliquid_n_sig_figs` and `hyperliquid_n_sig_figs_per_tier`.
+
+Lighter checks:
+
+1. Validate REST depth path for liquid ticker without fallback.
+2. Validate forced/observed partial path triggers WS fallback.
+3. Confirm row sets `lighter_ws_fallback=true` only when WS analysis used.
+
+### 15.3 Minute aggregation checks
+
+1. Verify 3 samples produce exactly 1 row per `exchange x ticker x minute`.
+2. Verify median aggregation for numeric fields.
+3. Verify boolean majority handling and tie behavior.
+4. Verify full-failure minute still writes row with null metrics + error.
+
+### 15.4 CSV and idempotency checks
+
+1. Re-run same minute window and confirm no duplicate key rows.
+2. Validate schema/header order exactly matches Section 7.
+3. Run duplicate scan on `(ts_minute_utc, exchange, ticker)`.
+4. Validate day file row count equals expected minutes * exchanges * tickers (minus allowed downtime windows).
+
+### 15.5 Operational checks
+
+1. Confirm workflow timeout guard and kill switch behavior.
+2. Confirm logs include rate header telemetry for supported exchanges.
+3. Alert when exchange failure ratio exceeds threshold over rolling window.
+4. Confirm archive/rotation does not break downstream CSV consumers.

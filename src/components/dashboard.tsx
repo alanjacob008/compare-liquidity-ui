@@ -4,6 +4,7 @@ import { useState } from "react";
 import { EXCHANGES, EXCHANGE_LABELS } from "@/lib/constants";
 import type { ExchangeRecord, ExchangeStatus, SpreadUnit, TickerKey } from "@/lib/types";
 import { DataTable } from "./data-table";
+import { DepthChart } from "./depth-chart";
 import { SlippagePanel } from "./slippage-panel";
 import { SpreadCards } from "./spread-cards";
 
@@ -34,6 +35,17 @@ export function Dashboard({ ticker, statuses, lastRefreshAt }: DashboardProps) {
         spreadUnit={spreadUnit}
         onToggleUnit={() => setSpreadUnit((u) => (u === "bps" ? "pct" : "bps"))}
       />
+
+      <section className="panel">
+        <div className="mb-4 space-y-1">
+          <p className="label">Order book depth</p>
+          <h3 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">{ticker} Multi-Venue Depth Curves</h3>
+          <p className="text-sm text-[var(--text-secondary)]">
+            Compare bid/ask cumulative depth by venue, with per-side cap presets from $1K to $1M.
+          </p>
+        </div>
+        <DepthChart statuses={statuses} ticker={ticker} />
+      </section>
     </section>
   );
 }

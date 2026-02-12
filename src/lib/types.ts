@@ -36,6 +36,9 @@ export interface LiquidityAnalysis {
   meta?: {
     isAggregatedEstimate?: boolean;
     hyperliquidNSigFigs?: number;
+    /** nSigFigs used per tier index, e.g. [5, 5, 4, 3] */
+    hyperliquidNSigFigsPerTier?: number[];
+    lighterWsFallback?: boolean;
   };
 }
 
@@ -45,6 +48,7 @@ export interface ExchangeStatus {
   error: string | null;
   lastUpdated: number | null;
   analysis: LiquidityAnalysis | null;
+  book: NormalizedBook | null;
 }
 
 export type ExchangeRecord<T> = Record<ExchangeKey, T>;

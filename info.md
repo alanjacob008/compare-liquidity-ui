@@ -66,9 +66,11 @@ Rate limits: 1,200 weighted requests per minute per IP. l2Book costs weight 2.
 
 ---
 
-## 2. Lighter - numeric market IDs via REST GET
+## 2. Lighter - numeric market IDs via REST GET + WebSocket fallback
 
 Lighter identifies markets by integer index rather than ticker symbol. Use GET /api/v1/orderBooks to discover available market IDs.
+
+### REST endpoint
 
 | Detail | Value |
 | --- | --- |
@@ -82,17 +84,48 @@ Parameters (query string):
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | market_id | int | Yes | Numeric market identifier |
-| limit | int | No | Number of levels to return |
+| limit | int | Yes | Number of orders per side to return. Range: 1–250 |
 
 Example request (BTC perpetual):
 
 ```
-GET https://mainnet.zklighter.elliot.ai/api/v1/orderBookOrders?market_id=1
+GET https://mainnet.zklighter.elliot.ai/api/v1/orderBookOrders?market_id=1&limit=250
 ```
 
-Response contains bids and asks arrays with price and size strings.
+Response contains bids and asks arrays of individual orders with `price` and `remaining_base_amount` strings. Orders at the same price must be aggregated client-side.
 
-Rate limits: standard accounts 60 requests per minute; premium accounts 24,000 weighted requests per minute. orderBookOrders has weight 300.
+Important limitation (depth): The `limit` parameter has a **hard maximum of 250** (the API returns error code 20001 "invalid param" for any value above 250). There is no pagination (no offset, cursor, or page parameter). The `total_bids` / `total_asks` fields in the response simply echo the limit back — they do not report total orders on the book.
+
+For less liquid tokens (e.g. LIT), 250 orders per side can cover far less than the actual book depth. Tested 2026-02-12 on LIT (market_id=120):
+
+| Source | Bid levels | Ask levels | Ask notional | $1M fill |
+| --- | --- | --- | --- | --- |
+| REST (limit=250) | 191 unique | 201 unique | ~$868K | **Partial** |
+| WebSocket (full) | **798** | **1,662** | **$6.15M** | **Full** |
+
+The REST API cut off ~88% of the ask-side book for LIT. There is **no REST endpoint that returns aggregated price levels** — orderBookOrders is the only orderbook REST endpoint.
+
+### WebSocket endpoint (full depth, aggregated levels)
+
+| Detail | Value |
+| --- | --- |
+| Type | WebSocket |
+| URL | wss://mainnet.zklighter.elliot.ai/stream |
+| Auth required | No |
+
+Subscribe by sending:
+```json
+{"type": "subscribe", "channel": "order_book/{MARKET_ID}"}
+```
+
+The server sends a full L2-aggregated snapshot on subscription (no depth limit), then incremental delta updates every ~50ms. Each level has `price` and `size` (already aggregated by price). Continuity is verified via `begin_nonce` matching the previous message's `nonce`.
+
+Live view behavior in this UI:
+- Default Lighter request uses the REST endpoint with limit=250.
+- If any slippage tier shows partial fill on the REST data, the app automatically opens a one-shot WebSocket connection to fetch the full aggregated book as a fallback.
+- UI labels this case as "WebSocket depth (REST API capped at 250 orders)" to indicate the data source switch.
+
+Rate limits: standard accounts 60 requests per minute; premium accounts 24,000 weighted requests per minute. orderBookOrders has weight 300. WebSocket connections have no documented rate limit for public reads.
 
 ---
 
@@ -171,7 +204,7 @@ Parameters (query string):
 | --- | --- | --- | --- |
 | category | string | Yes | Product type: linear, inverse, spot, option |
 | symbol | string | Yes | Symbol in uppercase, e.g. BTCUSDT |
-| limit | int | No | Levels per side. For linear or inverse: 1-500 (default 25). For spot: 1-200. For option: 1-25 |
+| limit | int | No | Levels per side. Docs say linear/inverse max 500, but **actual API returns up to 1,000** (tested 2026-02-12). Default 25. For spot: 1-200. For option: 1-25 |
 
 Example request (BTC/USDT linear perpetual, 50 levels):
 
@@ -217,10 +250,10 @@ Rate limits: 100 requests per 10-second window per IP (each GET = 1 point). Enfo
 | Exchange | Method | Example URL | Symbol format | Max depth | Auth |
 | --- | --- | --- | --- | --- | --- |
 | Hyperliquid | POST /info | https://api.hyperliquid.xyz/info (body: {"type":"l2Book","coin":"BTC"}) | Simple name (BTC) | 20 levels | No |
-| Lighter | GET /api/v1/orderBookOrders | https://mainnet.zklighter.elliot.ai/api/v1/orderBookOrders?market_id=1 | Numeric ID (1) | Configurable | No |
+| Lighter | GET /api/v1/orderBookOrders (REST) or wss://…/stream (WS fallback) | https://mainnet.zklighter.elliot.ai/api/v1/orderBookOrders?market_id=1&limit=250 | Numeric ID (1) | REST: 250 orders/side; WS: unlimited | No |
 | AsterDEX | GET /fapi/v1/depth | https://fapi.asterdex.com/fapi/v1/depth?symbol=BTCUSDT&limit=20 | Pair (BTCUSDT) | 1000 levels | No |
 | Binance Futures | GET /fapi/v1/depth | https://fapi.binance.com/fapi/v1/depth?symbol=BTCUSDT&limit=1000 | Pair (BTCUSDT) | 1000 levels | No |
-| Bybit | GET /v5/market/orderbook | https://api.bybit.com/v5/market/orderbook?category=linear&symbol=BTCUSDT&limit=50 | Pair (BTCUSDT) + category | 500 levels | No |
+| Bybit | GET /v5/market/orderbook | https://api.bybit.com/v5/market/orderbook?category=linear&symbol=BTCUSDT&limit=1000 | Pair (BTCUSDT) + category | 1000 levels (docs say 500, actual 1000) | No |
 | dYdX | GET /v4/orderbooks/perpetualMarket/{ticker} | https://indexer.dydx.trade/v4/orderbooks/perpetualMarket/BTC-USD | Pair (BTC-USD) | Configurable | No |
 
 ---
@@ -345,7 +378,7 @@ Lighter uses numeric market IDs internally. The API route resolves symbol to mar
 | Lighter | GET | https://mainnet.zklighter.elliot.ai/api/v1/orderBookOrders?market_id=N | {bids:[{price,remaining_base_amount}], asks:[...]} |
 | AsterDEX | GET | https://fapi.asterdex.com/fapi/v1/depth?symbol=BTCUSDT&limit=100 | {bids:[[price,qty]], asks:[[price,qty]]} |
 | Binance | GET | https://fapi.binance.com/fapi/v1/depth?symbol=BTCUSDT&limit=1000 | {bids:[[price,qty]], asks:[[price,qty]]} |
-| Bybit | GET | https://api.bybit.com/v5/market/orderbook?category=linear&symbol=BTCUSDT&limit=500 | {result:{b:[[price,size]], a:[[price,size]]}} |
+| Bybit | GET | https://api.bybit.com/v5/market/orderbook?category=linear&symbol=BTCUSDT&limit=1000 | {result:{b:[[price,size]], a:[[price,size]]}} |
 
 ## Project structure
 
@@ -429,13 +462,13 @@ Inter - body text, labels, buttons
 2. Extend EXCHANGES, EXCHANGE_LABELS, EXCHANGE_COLORS, and TICKER_MAP in src/lib/constants.ts.
 3. Add src/lib/exchanges/binance.ts and src/lib/exchanges/bybit.ts parsers.
 4. Register new parsers in src/lib/exchanges/index.ts.
-5. Extend src/app/api/orderbook/route.ts with upstream URL builders. Binance: https://fapi.binance.com/fapi/v1/depth?symbol={symbol}&limit=1000. Bybit: https://api.bybit.com/v5/market/orderbook?category=linear&symbol={symbol}&limit=500.
+5. Extend src/app/api/orderbook/route.ts with upstream URL builders. Binance: https://fapi.binance.com/fapi/v1/depth?symbol={symbol}&limit=1000. Bybit: https://api.bybit.com/v5/market/orderbook?category=linear&symbol={symbol}&limit=1000.
 6. Optional UI tweak: consider grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 for 6 cards.
 
 ## Considerations
 - Rate limits: Binance (2,400 weight per minute) and Bybit (120 requests per minute on public) are sufficient for 1.5s polling.
 - CORS: Both APIs block browser requests; the Next.js proxy handles this.
-- Bybit depth limit: max 500 levels via REST.
+- Bybit depth limit: docs say 500, but API actually returns up to 1,000 levels. Using 1,000.
 - Hyperliquid depth: public l2Book snapshot caps at 20 levels.
 
 ## Verification

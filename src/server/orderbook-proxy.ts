@@ -101,7 +101,7 @@ async function buildUpstreamRequest(exchange: ExchangeKey, symbol: string): Prom
       };
     case "bybit":
       return {
-        url: `${BYBIT_BASE_URL}/v5/market/orderbook?category=linear&symbol=${encodeURIComponent(symbol)}&limit=500`,
+        url: `${BYBIT_BASE_URL}/v5/market/orderbook?category=linear&symbol=${encodeURIComponent(symbol)}&limit=1000`,
       };
     default:
       throw new Error(`Unsupported exchange: ${exchange}`);

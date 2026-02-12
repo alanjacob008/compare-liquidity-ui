@@ -36,6 +36,7 @@ export function SlippagePanel({ statuses, ticker, spreadUnit }: SlippagePanelPro
         </div>
         <SlippageChart side="bid" statuses={statuses} spreadUnit={spreadUnit} />
       </article>
+
     </section>
   );
 }

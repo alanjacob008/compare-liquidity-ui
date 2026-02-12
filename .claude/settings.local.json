@@ -19,7 +19,25 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:docs.dydx.exchange)",
       "WebFetch(domain:help.dydx.trade)",
-      "WebFetch(domain:docs.dydx.xyz)"
+      "WebFetch(domain:docs.dydx.xyz)",
+      "WebFetch(domain:mainnet.zklighter.elliot.ai)",
+      "Bash(dir /b \"%TEMP%\\\\lighter_250.json\")",
+      "Bash(powershell:*)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File \"C:\\\\temp\\\\count_levels.ps1\")",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"Get-ChildItem C:/temp/*.json -ErrorAction SilentlyContinue | Select-Object Name,Length\")",
+      "Bash(dir:*)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File \"E:/001_work/0017_PP_aiApps/compare-liquidity-ui/fetch_orderbooks.ps1\":*)",
+      "Bash(del \"E:\\\\001_work\\\\0017_PP_aiApps\\\\compare-liquidity-ui\\\\fetch_orderbooks.ps1\")",
+      "Bash(del:*)",
+      "Bash(powershell.exe -Command \"Remove-Item ''E:/001_work/0017_PP_aiApps/compare-liquidity-ui/fetch_orderbooks.ps1'' -ErrorAction SilentlyContinue; Get-ChildItem ''E:/001_work/0017_PP_aiApps/compare-liquidity-ui/C:temp*'' -ErrorAction SilentlyContinue | Remove-Item\")",
+      "Bash(powershell.exe -Command \"Remove-Item -Path ''E:/001_work/0017_PP_aiApps/compare-liquidity-ui/fetch_orderbooks.ps1'' -Force -ErrorAction SilentlyContinue\")",
+      "Bash(curl.exe:*)",
+      "WebFetch(domain:lighter.xyz)",
+      "WebFetch(domain:deepwiki.com)",
+      "Bash(npx:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npm install:*)"
     ]
   }
 }
