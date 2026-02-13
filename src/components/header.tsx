@@ -14,7 +14,8 @@ export function Header() {
           Real-time Perpetual Liquidity Monitor
         </h1>
         <p className="mt-4 max-w-2xl text-sm text-[var(--text-secondary)] sm:text-base">
-          A modern venue comparison dashboard for spreads and slippage depth across centralized and decentralized markets.
+          A modern venue comparison dashboard for spreads and slippage depth
+          across centralized and decentralized markets.
         </p>
       </div>
     </header>

@@ -3,10 +3,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Highcharts from "highcharts";
 import HighchartsReact from "highcharts-react-official";
-import { EXCHANGES, EXCHANGE_COLORS, EXCHANGE_LABELS, NOTIONAL_TIERS } from "@/lib/constants";
+import {
+  EXCHANGES,
+  EXCHANGE_COLORS,
+  EXCHANGE_LABELS,
+  NOTIONAL_TIERS,
+} from "@/lib/constants";
 import { EXCHANGE_REGISTRY } from "@/lib/exchanges";
 import { fetchOrderbookRaw } from "@/lib/orderbook-client";
-import type { BookLevel, ExchangeKey, ExchangeRecord, ExchangeStatus, NormalizedBook, TickerKey } from "@/lib/types";
+import type {
+  BookLevel,
+  ExchangeKey,
+  ExchangeRecord,
+  ExchangeStatus,
+  NormalizedBook,
+  TickerKey,
+} from "@/lib/types";
 
 interface DepthChartProps {
   statuses: ExchangeRecord<ExchangeStatus>;
@@ -63,7 +75,7 @@ function buildCumulativeNotional(
   levels: BookLevel[],
   midPrice: number,
   side: BookSide,
-  depthTargetNotional: number
+  depthTargetNotional: number,
 ): DepthPoint[] {
   let cumulative = 0;
   const points: DepthPoint[] = [[0, 0]];
@@ -98,16 +110,29 @@ interface ExchangeDepthSeries {
 }
 
 export function DepthChart({ statuses, ticker }: DepthChartProps) {
-  const [fallbackBooks, setFallbackBooks] = useState<Partial<Record<ExchangeKey, NormalizedBook>>>({});
-  const [activeExchanges, setActiveExchanges] = useState<ExchangeKey[]>(EXCHANGES);
-  const [depthTargetNotional, setDepthTargetNotional] = useState<DepthTargetNotional>(1_000_000);
+  const [fallbackBooks, setFallbackBooks] = useState<
+    Partial<Record<ExchangeKey, NormalizedBook>>
+  >({});
+  const [activeExchanges, setActiveExchanges] =
+    useState<ExchangeKey[]>(EXCHANGES);
+  const [depthTargetNotional, setDepthTargetNotional] =
+    useState<DepthTargetNotional>(1_000_000);
   const [isPaused, setIsPaused] = useState(false);
-  const [pausedDepth, setPausedDepth] = useState<ExchangeDepthSeries[] | null>(null);
+  const [pausedDepth, setPausedDepth] = useState<ExchangeDepthSeries[] | null>(
+    null,
+  );
   const [debugMode, setDebugMode] = useState(false);
-  const [debugSnapshot, setDebugSnapshot] = useState<AxisDebugSnapshot | null>(null);
-  const [containerSize, setContainerSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  const [debugSnapshot, setDebugSnapshot] = useState<AxisDebugSnapshot | null>(
+    null,
+  );
+  const [containerSize, setContainerSize] = useState<{
+    width: number;
+    height: number;
+  }>({ width: 0, height: 0 });
   const chartWrapperRef = useRef<HTMLDivElement | null>(null);
-  const [chartInstance, setChartInstance] = useState<Highcharts.Chart | null>(null);
+  const [chartInstance, setChartInstance] = useState<Highcharts.Chart | null>(
+    null,
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -123,8 +148,18 @@ export function DepthChart({ statuses, ticker }: DepthChartProps) {
       if (book.bids.length === 0 || book.asks.length === 0) return [];
       const midPrice = (book.bids[0].px + book.asks[0].px) / 2;
 
-      const bid = buildCumulativeNotional(book.bids, midPrice, "bid", depthTargetNotional);
-      const ask = buildCumulativeNotional(book.asks, midPrice, "ask", depthTargetNotional);
+      const bid = buildCumulativeNotional(
+        book.bids,
+        midPrice,
+        "bid",
+        depthTargetNotional,
+      );
+      const ask = buildCumulativeNotional(
+        book.asks,
+        midPrice,
+        "ask",
+        depthTargetNotional,
+      );
       if (bid.length === 0 || ask.length === 0) return [];
 
       return [{ exchange, bid, ask }];
@@ -142,7 +177,7 @@ export function DepthChart({ statuses, ticker }: DepthChartProps) {
           const raw = await fetchOrderbookRaw(exchange, ticker);
           const book = EXCHANGE_REGISTRY[exchange].parse(raw);
           return { exchange, book };
-        })
+        }),
       );
 
       if (!active) return;
@@ -177,8 +212,18 @@ export function DepthChart({ statuses, ticker }: DepthChartProps) {
       if (book.bids.length === 0 || book.asks.length === 0) return [];
       const midPrice = (book.bids[0].px + book.asks[0].px) / 2;
 
-      const bid = buildCumulativeNotional(book.bids, midPrice, "bid", depthTargetNotional);
-      const ask = buildCumulativeNotional(book.asks, midPrice, "ask", depthTargetNotional);
+      const bid = buildCumulativeNotional(
+        book.bids,
+        midPrice,
+        "bid",
+        depthTargetNotional,
+      );
+      const ask = buildCumulativeNotional(
+        book.asks,
+        midPrice,
+        "ask",
+        depthTargetNotional,
+      );
       if (bid.length === 0 || ask.length === 0) return [];
 
       return [{ exchange, bid, ask }];
@@ -190,21 +235,31 @@ export function DepthChart({ statuses, ticker }: DepthChartProps) {
     setPausedDepth(null);
   }, [depthTargetNotional, ticker]);
 
-  const effectiveDepthByExchange = isPaused && pausedDepth ? pausedDepth : depthByExchange;
+  const effectiveDepthByExchange =
+    isPaused && pausedDepth ? pausedDepth : depthByExchange;
 
   const visibleDepth = useMemo(
-    () => effectiveDepthByExchange.filter((entry) => activeExchanges.includes(entry.exchange)),
-    [activeExchanges, effectiveDepthByExchange]
+    () =>
+      effectiveDepthByExchange.filter((entry) =>
+        activeExchanges.includes(entry.exchange),
+      ),
+    [activeExchanges, effectiveDepthByExchange],
   );
 
   const maxAbsBps = useMemo(() => {
     return visibleDepth.reduce((acc, entry) => {
-      const localMax = [...entry.bid, ...entry.ask].reduce((m, point) => Math.max(m, Math.abs(point[0])), 0);
+      const localMax = [...entry.bid, ...entry.ask].reduce(
+        (m, point) => Math.max(m, Math.abs(point[0])),
+        0,
+      );
       return Math.max(acc, localMax);
     }, 0);
   }, [visibleDepth]);
 
-  const axisLimit = useMemo(() => Math.max(5, Number((maxAbsBps * 1.12).toFixed(2))), [maxAbsBps]);
+  const axisLimit = useMemo(
+    () => Math.max(5, Number((maxAbsBps * 1.12).toFixed(2))),
+    [maxAbsBps],
+  );
 
   useEffect(() => {
     const el = chartWrapperRef.current;
@@ -245,10 +300,14 @@ export function DepthChart({ statuses, ticker }: DepthChartProps) {
         plotHeight: chartInstance.plotHeight,
         xMin: Number.isFinite(xAxis?.min ?? NaN) ? Number(xAxis.min) : null,
         xMax: Number.isFinite(xAxis?.max ?? NaN) ? Number(xAxis.max) : null,
-        xTicks: Array.isArray(xAxis?.tickPositions) ? [...xAxis.tickPositions] : [],
+        xTicks: Array.isArray(xAxis?.tickPositions)
+          ? [...xAxis.tickPositions]
+          : [],
         yMin: Number.isFinite(yAxis?.min ?? NaN) ? Number(yAxis.min) : null,
         yMax: Number.isFinite(yAxis?.max ?? NaN) ? Number(yAxis.max) : null,
-        yTicks: Array.isArray(yAxis?.tickPositions) ? [...yAxis.tickPositions] : [],
+        yTicks: Array.isArray(yAxis?.tickPositions)
+          ? [...yAxis.tickPositions]
+          : [],
       });
     };
 
@@ -260,36 +319,38 @@ export function DepthChart({ statuses, ticker }: DepthChartProps) {
   const options = useMemo<Highcharts.Options>(() => {
     const chartHeight = Math.max(320, Math.floor(containerSize.height || 460));
 
-    const series: Highcharts.SeriesOptionsType[] = visibleDepth.flatMap(({ exchange, bid, ask }) => {
-      const color = EXCHANGE_COLORS[exchange];
-      const label = EXCHANGE_LABELS[exchange];
+    const series: Highcharts.SeriesOptionsType[] = visibleDepth.flatMap(
+      ({ exchange, bid, ask }) => {
+        const color = EXCHANGE_COLORS[exchange];
+        const label = EXCHANGE_LABELS[exchange];
 
-      const bidSeries: Highcharts.SeriesAreaOptions = {
-        type: "area",
-        name: `${label} bid`,
-        data: bid,
-        color,
-        lineWidth: 1.1,
-        fillOpacity: 0.08,
-        threshold: null,
-        turboThreshold: 0,
-      };
+        const bidSeries: Highcharts.SeriesAreaOptions = {
+          type: "area",
+          name: `${label} bid`,
+          data: bid,
+          color,
+          lineWidth: 1.1,
+          fillOpacity: 0.08,
+          threshold: null,
+          turboThreshold: 0,
+        };
 
-      const askSeries: Highcharts.SeriesAreaOptions = {
-        type: "area",
-        name: `${label} ask`,
-        data: ask,
-        color,
-        lineWidth: 1.1,
-        fillOpacity: 0.02,
-        dashStyle: "ShortDash",
-        showInLegend: false,
-        threshold: null,
-        turboThreshold: 0,
-      };
+        const askSeries: Highcharts.SeriesAreaOptions = {
+          type: "area",
+          name: `${label} ask`,
+          data: ask,
+          color,
+          lineWidth: 1.1,
+          fillOpacity: 0.02,
+          dashStyle: "ShortDash",
+          showInLegend: false,
+          threshold: null,
+          turboThreshold: 0,
+        };
 
-      return [bidSeries, askSeries];
-    });
+        return [bidSeries, askSeries];
+      },
+    );
 
     return {
       chart: {
@@ -381,10 +442,16 @@ export function DepthChart({ statuses, ticker }: DepthChartProps) {
           };
           const bps = formatBps(Number(ctx.x));
           const lines = (ctx.points ?? [])
-            .map((point: { color?: string; y?: number; series: { name: string } }) => {
-              const marker = `<span style="color:${point.color}">\u25CF</span>`;
-              return `${marker} ${point.series.name}: <b>${formatUsdCompact(Number(point.y))}</b>`;
-            })
+            .map(
+              (point: {
+                color?: string;
+                y?: number;
+                series: { name: string };
+              }) => {
+                const marker = `<span style="color:${point.color}">\u25CF</span>`;
+                return `${marker} ${point.series.name}: <b>${formatUsdCompact(Number(point.y))}</b>`;
+              },
+            )
             .join("<br/>");
 
           return `<span style="color:#9fb0d1">From mid: ${bps}</span><br/><span style="color:#9fb0d1">Per-side cap ${formatUsdCompact(depthTargetNotional)} | ${isPaused ? "Paused snapshot" : "Live updates"}</span><br/>${lines}`;
@@ -402,7 +469,18 @@ export function DepthChart({ statuses, ticker }: DepthChartProps) {
       },
       series,
     };
-  }, [axisLimit, containerSize.height, depthTargetNotional, isPaused, visibleDepth]);
+  }, [
+    axisLimit,
+    containerSize.height,
+    depthTargetNotional,
+    isPaused,
+    visibleDepth,
+  ]);
+
+  const manualRulerTicks = useMemo(() => {
+    const fractions = [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1];
+    return fractions.map((f) => Number((f * axisLimit).toFixed(1)));
+  }, [axisLimit]);
 
   if (depthByExchange.length === 0) {
     return (
@@ -437,20 +515,19 @@ export function DepthChart({ statuses, ticker }: DepthChartProps) {
     setIsPaused(true);
   };
 
-  const manualRulerTicks = useMemo(() => {
-    const fractions = [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1];
-    return fractions.map((f) => Number((f * axisLimit).toFixed(1)));
-  }, [axisLimit]);
-
   return (
     <div className="space-y-2">
       <div className="text-xs text-[var(--text-muted)]">
-        Each venue contributes bid/ask cumulative notional curves up to {formatUsdCompact(depthTargetNotional)} per side. Use Pause to freeze the current snapshot and compare shapes.
+        Each venue contributes bid/ask cumulative notional curves up to{" "}
+        {formatUsdCompact(depthTargetNotional)} per side. Use Pause to freeze
+        the current snapshot and compare shapes.
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {EXCHANGES.map((exchange) => {
           const isActive = activeExchanges.includes(exchange);
-          const hasData = depthByExchange.some((entry) => entry.exchange === exchange);
+          const hasData = depthByExchange.some(
+            (entry) => entry.exchange === exchange,
+          );
           const color = EXCHANGE_COLORS[exchange];
           return (
             <button
@@ -504,7 +581,9 @@ export function DepthChart({ statuses, ticker }: DepthChartProps) {
         </button>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-[var(--text-secondary)]">Per-side depth cap:</span>
+        <span className="text-xs text-[var(--text-secondary)]">
+          Per-side depth cap:
+        </span>
         {DEPTH_TARGET_OPTIONS.map((target) => {
           const isActive = depthTargetNotional === target;
           return (
@@ -523,7 +602,10 @@ export function DepthChart({ statuses, ticker }: DepthChartProps) {
           );
         })}
       </div>
-      <div ref={chartWrapperRef} className="h-[460px] w-full rounded-xl border border-[color:var(--border)]">
+      <div
+        ref={chartWrapperRef}
+        className="h-[460px] w-full rounded-xl border border-[color:var(--border)]"
+      >
         {visibleDepth.length > 0 ? (
           <HighchartsReact
             highcharts={Highcharts}
@@ -539,22 +621,31 @@ export function DepthChart({ statuses, ticker }: DepthChartProps) {
       </div>
       {debugMode ? (
         <div className="space-y-2 rounded-lg border border-[color:rgba(255,111,124,0.4)] bg-[color:rgba(255,111,124,0.08)] p-3 text-xs text-[var(--text-secondary)]">
-          <p className="font-medium text-[var(--text-primary)]">Depth Debug Mode</p>
+          <p className="font-medium text-[var(--text-primary)]">
+            Depth Debug Mode
+          </p>
           <p>
-            Container: {containerSize.width}px x {containerSize.height}px, visible exchanges: {visibleDepth.length}, axisLimit: +/-
-            {axisLimit.toFixed(2)} bps, cap: {formatUsdCompact(depthTargetNotional)}, mode: {isPaused ? "paused" : "live"}
+            Container: {containerSize.width}px x {containerSize.height}px,
+            visible exchanges: {visibleDepth.length}, axisLimit: +/-
+            {axisLimit.toFixed(2)} bps, cap:{" "}
+            {formatUsdCompact(depthTargetNotional)}, mode:{" "}
+            {isPaused ? "paused" : "live"}
           </p>
           {debugSnapshot ? (
             <p>
-              Plot box: left {debugSnapshot.plotLeft}, top {debugSnapshot.plotTop}, width {debugSnapshot.plotWidth}, height{" "}
-              {debugSnapshot.plotHeight}; chart {debugSnapshot.chartWidth} x {debugSnapshot.chartHeight}
+              Plot box: left {debugSnapshot.plotLeft}, top{" "}
+              {debugSnapshot.plotTop}, width {debugSnapshot.plotWidth}, height{" "}
+              {debugSnapshot.plotHeight}; chart {debugSnapshot.chartWidth} x{" "}
+              {debugSnapshot.chartHeight}
             </p>
           ) : (
             <p>Chart snapshot unavailable yet.</p>
           )}
           {debugSnapshot ? (
             <p>
-              X ticks: {debugSnapshot.xTicks.map((v) => formatBpsTick(v)).join(", ")} | Y ticks:{" "}
+              X ticks:{" "}
+              {debugSnapshot.xTicks.map((v) => formatBpsTick(v)).join(", ")} | Y
+              ticks:{" "}
               {debugSnapshot.yTicks.map((v) => formatUsdCompact(v)).join(", ")}
             </p>
           ) : null}
@@ -562,7 +653,10 @@ export function DepthChart({ statuses, ticker }: DepthChartProps) {
             <p className="mb-1">Manual X ruler (bps)</p>
             <div className="grid grid-cols-9 gap-1">
               {manualRulerTicks.map((tick, idx) => (
-                <div key={`${tick}-${idx}`} className="rounded border border-[color:var(--border)] px-1 py-0.5 text-center">
+                <div
+                  key={`${tick}-${idx}`}
+                  className="rounded border border-[color:var(--border)] px-1 py-0.5 text-center"
+                >
                   {formatBpsTick(tick)}
                 </div>
               ))}

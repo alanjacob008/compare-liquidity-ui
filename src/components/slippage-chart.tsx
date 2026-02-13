@@ -1,9 +1,28 @@
 "use client";
 
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { EXCHANGES, EXCHANGE_COLORS, EXCHANGE_LABELS, NOTIONAL_TIERS } from "@/lib/constants";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
+  EXCHANGES,
+  EXCHANGE_COLORS,
+  EXCHANGE_LABELS,
+  NOTIONAL_TIERS,
+} from "@/lib/constants";
 import { formatTier } from "@/lib/format";
-import type { ExchangeKey, ExchangeRecord, ExchangeStatus, SpreadUnit } from "@/lib/types";
+import type {
+  ExchangeKey,
+  ExchangeRecord,
+  ExchangeStatus,
+  SpreadUnit,
+} from "@/lib/types";
 
 interface SlippageChartProps {
   side: "ask" | "bid";
@@ -42,9 +61,12 @@ function CustomTooltip({ active, payload, label, spreadUnit }: any) {
       {payload
         .filter((entry: any) => entry.value != null)
         .map((entry: any) => {
-          const val = typeof entry.value === "number" ? entry.value : Number(entry.value);
+          const val =
+            typeof entry.value === "number" ? entry.value : Number(entry.value);
           const display =
-            spreadUnit === "pct" ? `${(val / 100).toFixed(4)}%` : `${val.toFixed(2)} bps`;
+            spreadUnit === "pct"
+              ? `${(val / 100).toFixed(4)}%`
+              : `${val.toFixed(2)} bps`;
 
           return (
             <div
@@ -65,7 +87,9 @@ function CustomTooltip({ active, payload, label, spreadUnit }: any) {
                   flexShrink: 0,
                 }}
               />
-              <span style={{ color: "#e8eefb", fontSize: "12px", flex: 1 }}>{entry.name}</span>
+              <span style={{ color: "#e8eefb", fontSize: "12px", flex: 1 }}>
+                {entry.name}
+              </span>
               <span
                 style={{
                   color: "#e8eefb",
@@ -83,7 +107,11 @@ function CustomTooltip({ active, payload, label, spreadUnit }: any) {
   );
 }
 
-export function SlippageChart({ side, statuses, spreadUnit }: SlippageChartProps) {
+export function SlippageChart({
+  side,
+  statuses,
+  spreadUnit,
+}: SlippageChartProps) {
   const data: ChartDatum[] = NOTIONAL_TIERS.map((tier, idx) => {
     const row: ChartDatum = {
       tier: formatTier(tier),
@@ -98,7 +126,9 @@ export function SlippageChart({ side, statuses, spreadUnit }: SlippageChartProps
     return row;
   });
 
-  const hasData = data.some((row) => EXCHANGES.some((exchange) => typeof row[exchange] === "number"));
+  const hasData = data.some((row) =>
+    EXCHANGES.some((exchange) => typeof row[exchange] === "number"),
+  );
 
   if (!hasData) {
     return (
@@ -111,8 +141,15 @@ export function SlippageChart({ side, statuses, spreadUnit }: SlippageChartProps
   return (
     <div className="h-[300px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ left: 4, right: 12, top: 6, bottom: 6 }} barGap={2}>
-          <CartesianGrid strokeDasharray="4 4" stroke="rgba(186, 213, 255, 0.12)" />
+        <BarChart
+          data={data}
+          margin={{ left: 4, right: 12, top: 6, bottom: 6 }}
+          barGap={2}
+        >
+          <CartesianGrid
+            strokeDasharray="4 4"
+            stroke="rgba(186, 213, 255, 0.12)"
+          />
           <XAxis
             dataKey="tier"
             tick={{ fill: "#9fb0d1", fontSize: 12 }}

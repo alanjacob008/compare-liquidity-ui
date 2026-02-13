@@ -19,12 +19,10 @@ type LighterMarketsResponse = {
   }>;
 };
 
-let lighterMarketCache:
-  | {
-      expiresAt: number;
-      bySymbol: Record<string, number>;
-    }
-  | null = null;
+let lighterMarketCache: {
+  expiresAt: number;
+  bySymbol: Record<string, number>;
+} | null = null;
 
 type HyperliquidBookOptions = {
   nSigFigs?: 2 | 3 | 4 | 5;
@@ -47,7 +45,10 @@ function withProxy(url: string): string {
   return `${PROXY_PREFIX}${encodeURIComponent(url)}`;
 }
 
-async function requestJson<T = unknown>(url: string, init?: RequestInit): Promise<T> {
+async function requestJson<T = unknown>(
+  url: string,
+  init?: RequestInit,
+): Promise<T> {
   const response = await fetch(withProxy(url), {
     ...(init ?? {}),
     cache: "no-store",
@@ -61,7 +62,9 @@ async function requestJson<T = unknown>(url: string, init?: RequestInit): Promis
 }
 
 async function refreshLighterMarketCache(): Promise<void> {
-  const payload = await requestJson<LighterMarketsResponse>(`${LIGHTER_BASE_URL}/orderBooks`);
+  const payload = await requestJson<LighterMarketsResponse>(
+    `${LIGHTER_BASE_URL}/orderBooks`,
+  );
 
   if (!payload.order_books || !Array.isArray(payload.order_books)) {
     throw new Error("Lighter market list is malformed");
@@ -93,7 +96,11 @@ export async function resolveLighterMarketId(symbol: string): Promise<number> {
   return marketId;
 }
 
-export async function fetchOrderbookRaw(exchange: ExchangeKey, ticker: TickerKey, options?: FetchOrderbookOptions): Promise<unknown> {
+export async function fetchOrderbookRaw(
+  exchange: ExchangeKey,
+  ticker: TickerKey,
+  options?: FetchOrderbookOptions,
+): Promise<unknown> {
   if (!isTickerSupportedOnExchange(ticker, exchange)) {
     throw new Error(`${exchange} does not list ${ticker}`);
   }
@@ -112,8 +119,10 @@ export async function fetchOrderbookRaw(exchange: ExchangeKey, ticker: TickerKey
         type: "l2Book",
         coin: symbol,
       };
-      if (hyperliquid?.nSigFigs !== undefined) body.nSigFigs = hyperliquid.nSigFigs;
-      if (hyperliquid?.mantissa !== undefined) body.mantissa = hyperliquid.mantissa;
+      if (hyperliquid?.nSigFigs !== undefined)
+        body.nSigFigs = hyperliquid.nSigFigs;
+      if (hyperliquid?.mantissa !== undefined)
+        body.mantissa = hyperliquid.mantissa;
 
       return requestJson(HYPERLIQUID_URL, {
         method: "POST",
@@ -124,17 +133,27 @@ export async function fetchOrderbookRaw(exchange: ExchangeKey, ticker: TickerKey
       });
     }
     case "dydx":
-      return requestJson(`${DYDX_BASE_URL}/orderbooks/perpetualMarket/${encodeURIComponent(symbol)}`);
+      return requestJson(
+        `${DYDX_BASE_URL}/orderbooks/perpetualMarket/${encodeURIComponent(symbol)}`,
+      );
     case "lighter": {
       const marketId = await resolveLighterMarketId(symbol);
-      return requestJson(`${LIGHTER_BASE_URL}/orderBookOrders?market_id=${marketId}&limit=250`);
+      return requestJson(
+        `${LIGHTER_BASE_URL}/orderBookOrders?market_id=${marketId}&limit=250`,
+      );
     }
     case "asterdex":
-      return requestJson(`${ASTERDEX_BASE_URL}/fapi/v1/depth?symbol=${encodeURIComponent(symbol)}&limit=1000`);
+      return requestJson(
+        `${ASTERDEX_BASE_URL}/fapi/v1/depth?symbol=${encodeURIComponent(symbol)}&limit=1000`,
+      );
     case "binance":
-      return requestJson(`${BINANCE_BASE_URL}/fapi/v1/depth?symbol=${encodeURIComponent(symbol)}&limit=1000`);
+      return requestJson(
+        `${BINANCE_BASE_URL}/fapi/v1/depth?symbol=${encodeURIComponent(symbol)}&limit=1000`,
+      );
     case "bybit":
-      return requestJson(`${BYBIT_BASE_URL}/v5/market/orderbook?category=linear&symbol=${encodeURIComponent(symbol)}&limit=1000`);
+      return requestJson(
+        `${BYBIT_BASE_URL}/v5/market/orderbook?category=linear&symbol=${encodeURIComponent(symbol)}&limit=1000`,
+      );
     default:
       throw new Error(`Unsupported exchange: ${String(exchange)}`);
   }

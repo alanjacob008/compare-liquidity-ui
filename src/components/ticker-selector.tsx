@@ -31,7 +31,9 @@ export function TickerSelector({ value, onChange }: TickerSelectorProps) {
   const filteredTickers = useMemo(() => {
     const trimmed = query.trim().toLowerCase();
     if (!trimmed) return TRACKED_TICKERS;
-    return TRACKED_TICKERS.filter((row) => row.ticker.toLowerCase().includes(trimmed));
+    return TRACKED_TICKERS.filter((row) =>
+      row.ticker.toLowerCase().includes(trimmed),
+    );
   }, [query]);
 
   const onSelect = (ticker: TickerKey) => {
@@ -48,8 +50,12 @@ export function TickerSelector({ value, onChange }: TickerSelectorProps) {
         onClick={() => setIsOpen((prev) => !prev)}
         className="card-surface flex w-full items-center justify-between px-4 py-3 text-left transition hover:border-[color:var(--border-strong)]"
       >
-        <span className="data-mono text-lg font-medium text-[var(--text-primary)]">{value}</span>
-        <span className="text-xs text-[var(--text-secondary)]">{isOpen ? "Close" : "Select"}</span>
+        <span className="data-mono text-lg font-medium text-[var(--text-primary)]">
+          {value}
+        </span>
+        <span className="text-xs text-[var(--text-secondary)]">
+          {isOpen ? "Close" : "Select"}
+        </span>
       </button>
 
       {isOpen ? (
@@ -65,11 +71,16 @@ export function TickerSelector({ value, onChange }: TickerSelectorProps) {
 
           <ul className="max-h-56 overflow-y-auto p-2">
             {filteredTickers.length === 0 ? (
-              <li className="rounded-md px-3 py-2 text-sm text-[var(--text-muted)]">No tickers found.</li>
+              <li className="rounded-md px-3 py-2 text-sm text-[var(--text-muted)]">
+                No tickers found.
+              </li>
             ) : (
               filteredTickers.map((row) => {
                 const ticker = row.ticker;
-                const mappedSymbols = EXCHANGES.map((exchange) => `${EXCHANGE_LABELS[exchange]}: ${row.symbols[exchange]}`).join(" | ");
+                const mappedSymbols = EXCHANGES.map(
+                  (exchange) =>
+                    `${EXCHANGE_LABELS[exchange]}: ${row.symbols[exchange]}`,
+                ).join(" | ");
 
                 return (
                   <li key={ticker}>
@@ -77,11 +88,17 @@ export function TickerSelector({ value, onChange }: TickerSelectorProps) {
                       type="button"
                       onClick={() => onSelect(ticker)}
                       className={`w-full rounded-md px-3 py-2 text-left transition hover:bg-[color:rgba(79,140,255,0.18)] ${
-                        ticker === value ? "bg-[color:rgba(79,140,255,0.2)]" : ""
+                        ticker === value
+                          ? "bg-[color:rgba(79,140,255,0.2)]"
+                          : ""
                       }`}
                     >
-                      <p className="data-mono text-sm font-medium text-[var(--text-primary)]">{ticker}</p>
-                      <p className="text-xs text-[var(--text-secondary)]">{mappedSymbols}</p>
+                      <p className="data-mono text-sm font-medium text-[var(--text-primary)]">
+                        {ticker}
+                      </p>
+                      <p className="text-xs text-[var(--text-secondary)]">
+                        {mappedSymbols}
+                      </p>
                     </button>
                   </li>
                 );
